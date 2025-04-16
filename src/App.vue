@@ -1,17 +1,43 @@
 <template>
   <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
+    <NavigationBar v-if="isAuthenticated" @logout="handleLogout" />
+    <router-view></router-view>
   </div>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+import NavigationBar from './components/NavigationBar.vue'
+import router from './router'
 
 export default {
   name: 'App',
+  router,
   components: {
-    HelloWorld
+    NavigationBar
+  },
+  data() {
+    return {
+      isAuthenticated: false
+    }
+  },
+  created() {
+    // Check authentication state on app creation
+    this.checkAuth();
+    
+    // Listen for route changes to update auth state
+    this.$router.beforeEach((to, from, next) => {
+      this.checkAuth();
+      next();
+    });
+  },
+  methods: {
+    checkAuth() {
+      const token = localStorage.getItem('token');
+      this.isAuthenticated = !!token;
+    },
+    handleLogout() {
+      this.isAuthenticated = false;
+    }
   }
 }
 </script>
