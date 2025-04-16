@@ -15,6 +15,16 @@
       <!-- View Mode -->
       <div v-if="!editMode" class="profile-info">
         <h3>Personal Information</h3>
+        <div class="profile-picture">
+          <img 
+            :src="user.profilePictureUrl || 'http://localhost:3001/images/default-profilepicture.jpg'" 
+            alt="Profile picture"
+            class="profile-image"
+          >
+          <button @click="showUploadModal = true" class="edit-picture-btn">
+            {{ user.profilePictureUrl ? 'Change Picture' : 'Add Picture' }}
+          </button>
+        </div>
         <p><strong>Name:</strong> {{ user.name }}</p>
         <p><strong>Email:</strong> {{ user.email }}</p>
         
@@ -124,6 +134,31 @@
         </form>
       </div>
     </div>
+
+    <!-- Upload Profile Picture Modal -->
+    <div v-if="showUploadModal" class="modal">
+      <div class="modal-content">
+        <h3>Upload Profile Picture</h3>
+        <form @submit.prevent="uploadProfilePicture">
+          <div class="form-group">
+            <label for="profile_picture">Select an image</label>
+            <input 
+              type="file" 
+              id="profile_picture" 
+              ref="profilePictureInput"
+              accept="image/*"
+              required
+            >
+          </div>
+          <div class="modal-actions">
+            <button type="submit" :disabled="isUploading" class="upload-btn">
+              {{ isUploading ? 'Uploading...' : 'Upload' }}
+            </button>
+            <button type="button" @click="showUploadModal = false" class="cancel-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -137,7 +172,8 @@ export default {
       user: {
         id: '',
         name: '',
-        email: ''
+        email: '',
+        profilePictureUrl: ''
       },
       updatedUser: {
         name: '',
@@ -149,9 +185,11 @@ export default {
       isLoading: true,
       isUpdating: false,
       isDeleting: false,
+      isUploading: false,
       errorMessage: '',
       successMessage: '',
       showDeleteModal: false,
+      showUploadModal: false,
       deletePassword: '',
       deleteError: '',
       isOAuthUser: false
@@ -189,6 +227,8 @@ export default {
       .then(response => {
         this.user.name = response.data.name;
         this.user.email = response.data.email;
+        this.user.profilePictureUrl = response.data.profile_picture_url ?
+          `http://localhost:3001${response.data.profile_picture_url}` : null;
         
         // Check if this is an OAuth user (assuming your API returns this info)
         this.isOAuthUser = response.data.auth_type === 'google';
@@ -320,6 +360,49 @@ export default {
       // Since we're in the profile page, we know we're not on the home page
       // so this navigation won't be redundant
       this.$router.push('/');
+    },
+
+    uploadProfilePicture() {
+      this.isUploading = true;
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        this.$router.push('/login');
+        return;
+      }
+      
+      const formData = new FormData();
+      const fileInput = this.$refs.profilePictureInput;
+      
+      if (fileInput.files.length === 0) {
+        this.errorMessage = 'Please select an image file';
+        this.isUploading = false;
+        return;
+      }
+      
+      formData.append('profile_picture', fileInput.files[0]);
+      
+      axios.post(
+        `http://localhost:3001/users/${this.user.id}/profile-picture`, 
+        formData,
+        {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      )
+      .then(response => {
+        this.user.profilePictureUrl = `http://localhost:3001${response.data.profile_picture_url}`;
+        this.successMessage = 'Profile picture updated successfully';
+        this.showUploadModal = false;
+      })
+      .catch(error => {
+        this.errorMessage = error.response?.data?.error || 'Failed to upload profile picture';
+      })
+      .finally(() => {
+        this.isUploading = false;
+      });
     }
   }
 }
@@ -461,5 +544,32 @@ button:disabled {
   padding: 10px;
   border-radius: 4px;
   margin: 10px 0;
+}
+
+.profile-picture {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.profile-image {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #4CAF50;
+  margin-bottom: 10px;
+}
+
+.edit-picture-btn {
+  background-color: #2196F3;
+  margin-top: 5px;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+}
+
+.upload-btn {
+  background-color: #4CAF50;
 }
 </style>

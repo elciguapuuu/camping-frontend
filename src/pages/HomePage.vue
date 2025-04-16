@@ -25,7 +25,15 @@
       <div class="locations-grid">
         <div v-for="location in featuredLocations" :key="location.location_id" class="location-card">
           <div class="location-image">
-            <img :src="location.image_url || 'https://via.placeholder.com/300x200?text=No+Image'" alt="Location image">
+            <img 
+              v-if="location.coverImage" 
+              :src="`http://localhost:3001${location.coverImage}`" 
+              :alt="location.name"
+              class="location-image"
+            />
+            <div v-else class="location-image-placeholder">
+              <span>No image available</span>
+            </div>
           </div>
           <div class="location-info">
             <h3>{{ location.name }}</h3>
@@ -69,6 +77,7 @@ export default {
           this.featuredLocations = response.data
             .sort(() => 0.5 - Math.random())
             .slice(0, 6);
+          this.loadLocationImages(this.featuredLocations);
         })
         .catch(error => {
           console.error('Error loading featured locations:', error);
@@ -93,6 +102,32 @@ export default {
       this.$router.push({ 
         path: '/search', 
         query: queryParams
+      });
+    },
+    getImageUrl(location) {
+      if (location.coverImage) {
+        return `http://localhost:3001${location.coverImage}`;
+      } else {
+        return 'https://via.placeholder.com/300x200?text=No+Image';
+      }
+    },
+    loadLocationImages(locations) {
+      // For each location, fetch its images
+      locations.forEach(async (location) => {
+        try {
+          const response = await axios.get(
+            `http://localhost:3001/locations/${location.location_id}/images`
+          );
+          
+          if (response.data && response.data.length > 0) {
+            // Find cover image (is_cover=1) or use first image
+            const coverImage = response.data.find(img => img.is_cover === 1) || response.data[0];
+            // Important: Vue reactivity - use this special syntax to update array item property
+            this.$set(location, 'coverImage', coverImage.image_url);
+          }
+        } catch (error) {
+          console.error(`Error loading images for ${location.name}:`, error);
+        }
       });
     }
   }
