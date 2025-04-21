@@ -1,26 +1,25 @@
 <template>
   <div class="home">
-    <div class="auth-buttons" v-if="!isAuthenticated">
-      <router-link to="/login" class="auth-btn login">Log In</router-link>
-      <router-link to="/register" class="auth-btn register">Register</router-link>
-    </div>
-    
-    <h1>Welcome to Seeker</h1>
-    <p>Find your perfect camping destination</p>
-    
-    <div class="search-container">
-      <div class="search-form">
-        <h2>Find Camping Spots</h2>
-        <div class="search-inputs">
-          <input type="text" v-model="searchLocation" placeholder="City or Country">
-          <input type="date" v-model="checkIn" placeholder="Check-in">
-          <input type="date" v-model="checkOut" placeholder="Check-out">
-          <button @click="searchLocations" class="search-btn">Search</button>
+    <div class="hero">
+      <div class="hero-content">
+        <h1>Welcome to Seeker</h1>
+        <p class="hero-subtitle">Find your perfect camping destination</p>
+        
+        <div class="search-container">
+          <div class="search-form">
+            <h2>Find Camping Spots</h2>
+            <div class="search-inputs">
+              <input type="text" v-model="searchLocation" placeholder="City or Country">
+              <input type="date" v-model="checkIn" placeholder="Check-in">
+              <input type="date" v-model="checkOut" placeholder="Check-out">
+              <button @click="searchLocations" class="search-btn">Search</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
     
-    <div class="featured-locations" v-if="featuredLocations.length > 0">
+    <div class="featured-locations container" v-if="featuredLocations.length > 0">
       <h2>Featured Camping Spots</h2>
       <div class="locations-grid">
         <div v-for="location in featuredLocations" :key="location.location_id" class="location-card">
@@ -39,6 +38,11 @@
             <h3>{{ location.name }}</h3>
             <p class="location-area">{{ location.city }}, {{ location.country }}</p>
             <p class="location-price">€{{ location.price_per_night }} per night</p>
+            
+            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
+              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
+            </div>
+            
             <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
           </div>
         </div>
@@ -85,17 +89,16 @@ export default {
     },
     searchLocations() {
       // Build query params
-      const queryParams = new URLSearchParams();
+      const queryParams = {};
       
       if (this.searchLocation) {
-        // Try to determine if input is a city or country
-        queryParams.append('city', this.searchLocation);
-        queryParams.append('country', this.searchLocation);
+        // search name, city and country
+        queryParams.query = this.searchLocation;
       }
       
       if (this.checkIn && this.checkOut) {
-        queryParams.append('start_date', this.checkIn);
-        queryParams.append('end_date', this.checkOut);
+        queryParams.start_date = this.checkIn;
+        queryParams.end_date = this.checkOut;
       }
       
       // Navigate to search results page with query params
@@ -112,23 +115,39 @@ export default {
       }
     },
     loadLocationImages(locations) {
-      // For each location, fetch its images
+      // For each location, fetch its images and campsite types
       locations.forEach(async (location) => {
         try {
-          const response = await axios.get(
+          // Get location images
+          const imageResponse = await axios.get(
             `http://localhost:3001/locations/${location.location_id}/images`
           );
           
-          if (response.data && response.data.length > 0) {
+          if (imageResponse.data && imageResponse.data.length > 0) {
             // Find cover image (is_cover=1) or use first image
-            const coverImage = response.data.find(img => img.is_cover === 1) || response.data[0];
-            // Important: Vue reactivity - use this special syntax to update array item property
+            const coverImage = imageResponse.data.find(img => img.is_cover === 1) || imageResponse.data[0];
+            // use this special syntax to update array item property
             this.$set(location, 'coverImage', coverImage.image_url);
           }
+          
+          // Get campsite types
+          const typesResponse = await axios.get(
+            `http://localhost:3001/locations/${location.location_id}/campsitetype`
+          );
+          
+          if (typesResponse.data && typesResponse.data.length > 0) {
+            this.$set(location, 'campsiteTypes', typesResponse.data);
+          }
         } catch (error) {
-          console.error(`Error loading images for ${location.name}:`, error);
+          console.error(`Error loading data for ${location.name}:`, error);
         }
       });
+    },
+    getCampsiteTypesList(location) {
+      if (!location.campsiteTypes || !location.campsiteTypes.length) {
+        return 'No type specified';
+      }
+      return location.campsiteTypes.map(type => type.name).join(', ');
     }
   }
 }
@@ -136,130 +155,172 @@ export default {
 
 <style scoped>
 .home {
-  position: relative;
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.auth-buttons {
-  position: absolute;
-  top: 20px;
-  right: 20px;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
-.auth-btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  text-decoration: none;
-  font-weight: 500;
+.hero {
+  background: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.8)), 
+              url('https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2070&q=80') center/cover no-repeat;
+  height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  text-align: center;
 }
 
-.login {
-  background-color: #2c3e50;
-  color: white;
+.hero-content {
+  max-width: 800px;
+  width: 100%;
 }
 
-.register {
-  background-color: #42b983;
-  color: white;
+.hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
 }
 
-.auth-btn:hover {
-  opacity: 0.9;
+.hero-subtitle {
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
 }
 
 .search-container {
-  margin: 40px 0;
-  background-color: #f8f9fa;
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin: 0 auto;
+  max-width: 700px;
+  background-color: white;
+  border-radius: 4px;
+  padding: 20px;
+  border: 1px solid #ddd;
 }
 
 .search-form h2 {
-  margin-bottom: 20px;
-  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-size: 1.4rem;
 }
 
 .search-inputs {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
-  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .search-inputs input {
-  padding: 12px;
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 15px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  flex: 1 1 200px;
 }
 
 .search-btn {
-  padding: 12px 24px;
-  background-color: #42b983;
-  color: white;
-  border: none;
+  background-color: #f7f7f7;
+  border: 1px solid #ddd;
+  padding: 12px 20px;
   border-radius: 4px;
   cursor: pointer;
-  font-weight: bold;
-  flex: 0 0 auto;
+  font-weight: 600;
+  min-width: 120px;
 }
 
 .featured-locations {
-  margin-top: 60px;
+  padding: 40px 20px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.featured-locations h2 {
+  text-align: center;
+  margin-bottom: 30px;
 }
 
 .locations-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 30px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .location-card {
-  border-radius: 8px;
+  background-color: white;
+  border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  transition: transform 0.3s ease;
+  border: 1px solid #ddd;
 }
 
-.location-card:hover {
-  transform: translateY(-5px);
+.location-image {
+  height: 180px;
+  position: relative;
 }
 
 .location-image img {
   width: 100%;
-  height: 200px;
+  height: 100%;
   object-fit: cover;
+}
+
+.location-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #eee;
 }
 
 .location-info {
   padding: 15px;
-  text-align: left;
+}
+
+.location-info h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 1.2rem;
 }
 
 .location-area {
-  color: #666;
-  margin: 5px 0;
+  margin-bottom: 10px;
 }
 
 .location-price {
   font-weight: bold;
-  color: #42b983;
-  margin: 10px 0;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.campsite-types {
+  margin-bottom: 15px;
+  font-size: 0.9rem;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
 }
 
 .view-details {
   display: inline-block;
+  background-color: #f7f7f7;
   padding: 8px 16px;
-  background-color: #2c3e50;
-  color: white;
-  text-decoration: none;
   border-radius: 4px;
-  font-size: 0.9rem;
+  text-decoration: none;
+  font-weight: 500;
+  border: 1px solid #ddd;
+}
+
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 20px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .search-inputs {
+    flex-direction: column;
+  }
+  
+  .search-btn {
+    width: 100%;
+  }
 }
 </style>

@@ -35,14 +35,15 @@ const router = new VueRouter({
 router.beforeEach((to, from, next) => {
   // Check for token in URL (for Google OAuth redirect)
   if (to.path === '/' && to.query.token) {
-    const { token, userId, name, email } = to.query;
+    const { token, userId, name, email, profilePictureUrl } = to.query;
     
     // Store token and user data
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify({
       id: userId,
       name: name,
-      email: email
+      email: email,
+      profile_picture_url: profilePictureUrl || null
     }));
     
     // Clean up URL by removing query parameters

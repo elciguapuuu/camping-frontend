@@ -1,181 +1,247 @@
 <template>
   <div class="manage-location">
-    <h2>Create New Camping Location</h2>
+    <h2>{{ isEditing ? 'Edit Location' : 'Create New Camping Location' }}</h2>
     
     <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
     <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
     
-    <form @submit.prevent="handleSubmit" class="location-form">
-      <div class="form-group">
-        <label for="name">Location Name*</label>
-        <input 
-          type="text" 
-          id="name" 
-          v-model="location.name" 
-          placeholder="Enter a catchy name for your location"
-          required
-        >
-      </div>
-      
-      <div class="form-group">
-        <label for="description">Description*</label>
-        <textarea 
-          id="description" 
-          v-model="location.description" 
-          placeholder="Describe your location, its surroundings, and what makes it special"
-          rows="5"
-          required
-        ></textarea>
-      </div>
-      
-      <div class="form-row">
-        <div class="form-group">
-          <label for="city">City*</label>
-          <input 
-            type="text" 
-            id="city" 
-            v-model="location.city" 
-            placeholder="City"
-            required
-          >
-        </div>
-        
-        <div class="form-group">
-          <label for="country">Country*</label>
-          <select 
-            id="country" 
-            v-model="location.country" 
-            required
-          >
-            <option value="" disabled>Select country</option>
-            <option value="France">France</option>
-            <option value="Germany">Germany</option>
-            <option value="Italy">Italy</option>
-            <option value="Spain">Spain</option>
-            <option value="Portugal">Portugal</option>
-            <option value="Netherlands">Netherlands</option>
-            <option value="Belgium">Belgium</option>
-            <option value="Switzerland">Switzerland</option>
-            <option value="Austria">Austria</option>
-            <option value="Ireland">Ireland</option>
-            <option value="United Kingdom">United Kingdom</option>
-          </select>
-        </div>
-      </div>
-      
-      <div class="form-row">
-        <div class="form-group">
-          <label for="latitude">Latitude</label>
-          <input 
-            type="number" 
-            id="latitude" 
-            v-model="location.latitude" 
-            placeholder="e.g. 48.8566"
-            step="0.0001"
-          >
-        </div>
-        
-        <div class="form-group">
-          <label for="longitude">Longitude</label>
-          <input 
-            type="number" 
-            id="longitude" 
-            v-model="location.longitude" 
-            placeholder="e.g. 2.3522"
-            step="0.0001"
-          >
-        </div>
-      </div>
-      
-      <div class="form-group">
-        <label for="price_per_night">Price per night (€)*</label>
-        <input 
-          type="number" 
-          id="price_per_night" 
-          v-model="location.price_per_night" 
-          placeholder="Price in euros"
-          min="1"
-          step="0.01"
-          required
-        >
-      </div>
-      
-      <div class="form-group">
-        <label for="campsite_type">Campsite Type*</label>
-        <select 
-          id="campsite_type" 
-          v-model="location.campsite_type_id" 
-          required
-        >
-          <option value="" disabled>Select campsite type</option>
-          <option v-for="type in campsiteTypes" :key="type.campsitetypes_id" :value="type.campsitetypes_id">
-            {{ type.name }}
-          </option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>Amenities (select all that apply)</label>
-        <div class="amenities-list">
-          <div v-for="amenity in amenities" :key="amenity.amenity_id" class="amenity-item">
-            <input 
-              type="checkbox" 
-              :id="'amenity-' + amenity.amenity_id" 
-              :value="amenity.amenity_id"
-              v-model="location.amenities"
-            >
-            <label :for="'amenity-' + amenity.amenity_id">{{ amenity.name }}</label>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>Location Images (3-10 images)*</label>
-        <div class="image-upload-container">
-          <div class="upload-preview">
-            <div v-for="(image, index) in previewImages" :key="index" class="preview-item">
-              <img :src="image.preview" alt="Preview" class="preview-image">
-              <button type="button" @click="removeImage(index)" class="remove-image-btn">×</button>
-            </div>
-            <div v-if="previewImages.length < 10" class="upload-placeholder" @click="triggerFileInput">
-              <span>+</span>
-            </div>
-          </div>
-          <div class="upload-instructions">
-            <p>Select 3-10 images of your location. First image will be your main image.</p>
-            <p v-if="previewImages.length < 3" class="error-text">Please upload at least 3 images</p>
-            <input
-              type="file"
-              ref="fileInput"
-              accept="image/*"
-              multiple
-              @change="handleFileChange"
-              class="file-input"
-            >
-            <button type="button" @click="triggerFileInput" class="select-images-btn">
-              Select Images
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <div class="form-actions">
-        <button type="submit" :disabled="isSubmitting" class="submit-btn">
-          {{ isSubmitting ? 'Saving...' : (location.location_id ? 'Update Location' : 'Create Location') }}
-        </button>
-      </div>
-    </form>
-    
-    <div v-if="userLocations.length > 0" class="my-locations">
-      <h3>My Locations</h3>
-      <div class="locations-list">
-        <div v-for="location in userLocations" :key="location.location_id" class="location-item">
-          <h3>{{ location.name }}</h3>
-          <p>{{ location.description }}</p>
+    <div class="page-layout">
+      <!-- Location Form -->
+      <form @submit.prevent="handleSubmit" class="location-form">
+        <!-- Basic Information Section -->
+        <div class="form-section">
+          <h3 class="section-title">Basic Information</h3>
           
-          <div class="location-actions">
-            <button @click="editLocation(location)" class="edit-btn">Edit</button>
-            <button @click="deleteLocation(location.location_id)" class="delete-btn">Delete</button>
+          <div class="form-group">
+            <label for="name">Location Name*</label>
+            <input 
+              type="text" 
+              id="name" 
+              v-model="location.name" 
+              placeholder="Enter a catchy name for your location"
+              required
+            >
+          </div>
+          
+          <div class="form-group">
+            <label for="description">Description*</label>
+            <textarea 
+              id="description" 
+              v-model="location.description" 
+              placeholder="Describe your location, its surroundings, and what makes it special"
+              rows="5"
+              required
+            ></textarea>
+          </div>
+        </div>
+        
+        <!-- Location Details Section -->
+        <div class="form-section">
+          <h3 class="section-title">Location Details</h3>
+          
+          <div class="form-group">
+            <label for="address">Full Address*</label>
+            <input 
+              type="text" 
+              id="address" 
+              v-model="location.address" 
+              placeholder="Enter full address"
+              required
+            >
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="city">City*</label>
+              <input 
+                type="text" 
+                id="city" 
+                v-model="location.city" 
+                placeholder="City"
+                required
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="country">Country*</label>
+              <select 
+                id="country" 
+                v-model="location.country" 
+                required
+              >
+                <option value="" disabled>Select country</option>
+                <option value="France">France</option>
+                <option value="Germany">Germany</option>
+                <option value="Italy">Italy</option>
+                <option value="Spain">Spain</option>
+                <option value="Portugal">Portugal</option>
+                <option value="Netherlands">Netherlands</option>
+                <option value="Belgium">Belgium</option>
+                <option value="Switzerland">Switzerland</option>
+                <option value="Austria">Austria</option>
+                <option value="Ireland">Ireland</option>
+                <option value="United Kingdom">United Kingdom</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>
+              <input 
+                type="checkbox" 
+                v-model="showManualCoordinates"
+              > Having trouble finding your location? Enter coordinates manually
+            </label>
+          </div>
+          
+          <div v-if="showManualCoordinates" class="form-row">
+            <div class="form-group">
+              <label for="latitude">Latitude*</label>
+              <input 
+                type="number" 
+                id="latitude" 
+                v-model="location.latitude" 
+                placeholder="e.g. 42.4627"
+                step="0.0001"
+                required
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="longitude">Longitude*</label>
+              <input 
+                type="number" 
+                id="longitude" 
+                v-model="location.longitude" 
+                placeholder="e.g. -2.4449"
+                step="0.0001"
+                required
+              >
+            </div>
+            
+            <div class="form-group form-info">
+              <p>Tip: You can find coordinates by right-clicking a location on Google Maps and selecting "What's here?"</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="price_per_night">Price per night (€)*</label>
+            <input 
+              type="number" 
+              id="price_per_night" 
+              v-model="location.price_per_night" 
+              placeholder="Price in euros"
+              min="1"
+              step="0.01"
+              required
+            >
+          </div>
+        </div>
+        
+        <!-- Campsite Features Section -->
+        <div class="form-section">
+          <h3 class="section-title">Campsite Features</h3>
+          
+          <div class="form-group">
+            <label class="required-label">Campsite Types (select all that apply)*</label>
+            <div class="options-grid">
+              <div v-for="type in campsiteTypes" :key="type.campsitetypes_id" class="option-item">
+                <input 
+                  type="checkbox" 
+                  :id="'type-' + type.campsitetypes_id" 
+                  :value="type.campsitetypes_id"
+                  v-model="location.campsite_types"
+                >
+                <label :for="'type-' + type.campsitetypes_id">{{ type.name }}</label>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Amenities (select all that apply)</label>
+            <div class="options-grid">
+              <div v-for="amenity in amenities" :key="amenity.amenity_id" class="option-item">
+                <input 
+                  type="checkbox" 
+                  :id="'amenity-' + amenity.amenity_id" 
+                  :value="amenity.amenity_id"
+                  v-model="location.amenities"
+                >
+                <label :for="'amenity-' + amenity.amenity_id">{{ amenity.name }}</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Images Section -->
+        <div class="form-section">
+          <h3 class="section-title">Location Images</h3>
+          
+          <div class="form-group">
+            <label class="required-label">Upload Photos (3-10 images)*</label>
+            <div class="image-upload-container">
+              <div class="upload-preview">
+                <div v-for="(image, index) in previewImages" :key="index" class="preview-item">
+                  <img :src="image.preview" alt="Preview" class="preview-image">
+                  <button type="button" @click="removeImage(index)" class="remove-image-btn">×</button>
+                </div>
+                <div v-if="previewImages.length < 10" class="upload-placeholder" @click="triggerFileInput">
+                  <span>+</span>
+                </div>
+              </div>
+              <div class="upload-instructions">
+                <p>Select 3-10 images of your location. First image will be your main image.</p>
+                <p v-if="previewImages.length < 3" class="error-text">Please upload at least 3 images</p>
+                <input
+                  type="file"
+                  ref="fileInput"
+                  accept="image/*"
+                  multiple
+                  @change="handleFileChange"
+                  class="file-input"
+                >
+                <button type="button" @click="triggerFileInput" class="select-images-btn">
+                  Select Images
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Submit Section -->
+        <div class="form-actions">
+          <button type="submit" :disabled="isSubmitting || previewImages.length < 3" class="submit-btn">
+            {{ isSubmitting ? 'Saving...' : (isEditing ? 'Update Location' : 'Create Location') }}
+          </button>
+          <button v-if="isEditing" type="button" @click="resetForm" class="cancel-btn">
+            Cancel Editing
+          </button>
+        </div>
+      </form>
+      
+      <!-- My Locations Section -->
+      <div v-if="userLocations.length > 0" class="my-locations">
+        <h3>My Locations</h3>
+        <div class="locations-list">
+          <div v-for="location in userLocations" :key="location.location_id" class="location-item">
+            <div class="location-image" v-if="location.coverImage">
+              <img :src="getImageUrl(location)" :alt="location.name">
+            </div>
+            <div v-else class="location-image location-image-placeholder">
+              <span>No image</span>
+            </div>
+            <div class="location-details">
+              <h4>{{ location.name }}</h4>
+              <p class="location-area">{{ location.city }}, {{ location.country }}</p>
+              <p class="location-price">€{{ location.price_per_night }} per night</p>
+              <p class="campsite-type" v-if="location.campsite_type_name">
+                {{ location.campsite_type_name }}
+              </p>
+              <div class="location-actions">
+                <button @click="editLocation(location)" class="edit-btn">Edit</button>
+                <button @click="deleteLocation(location.location_id)" class="delete-btn">Delete</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -193,14 +259,17 @@ export default {
       location: {
         name: '',
         description: '',
+        address: '',
         city: '',
         country: '',
         price_per_night: null,
-        latitude: null,
-        longitude: null,
         amenities: [],
-        campsite_type_id: null
+        campsite_type_id: null, // Keep for backward compatibility
+        campsite_types: [],     // Add this new array for multiple types
+        latitude: null,
+        longitude: null
       },
+      showManualCoordinates: false,
       amenities: [],
       campsiteTypes: [],
       isSubmitting: false,
@@ -226,7 +295,7 @@ export default {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(response => {
-        // Ensure all amenity IDs are numbers
+        
         this.amenities = response.data.map(amenity => ({
           ...amenity,
           amenity_id: parseInt(amenity.amenity_id, 10)
@@ -250,55 +319,77 @@ export default {
       axios.get(`http://localhost:3001/locations/user/${userData.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      .then(async response => {
-        this.userLocations = response.data;
+      .then(response => {
+        // Create a copy of locations with proper reactive properties
+        const locations = response.data.map(location => {
+          return {
+            ...location,
+            coverImage: null,
+            allImages: [],
+            campsite_type_id: null,
+            campsite_type_name: 'Loading...'
+          };
+        });
         
-        // For each location, fetch its campsite type
-        for (const location of this.userLocations) {
-          try {
-            const campResponse = await axios.get(
-              `http://localhost:3001/locations/${location.location_id}/campsitetype`, 
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            
-            if (campResponse.data && campResponse.data.length > 0) {
-              location.campsite_type_id = campResponse.data[0].campsitetypes_id;
-              location.campsite_type_name = campResponse.data[0].name;
-            } else {
-              // Handle locations with no campsite type set
-              location.campsite_type_name = 'Not specified';
-            }
-          } catch (error) {
-            console.error(`Error fetching campsite type for location ${location.location_id}:`, error);
-            // Don't fail completely on error
-            location.campsite_type_name = 'Error loading';
-          }
-        }
-
-        // For each location, fetch its images
-        for (const location of this.userLocations) {
-          try {
-            const imageResponse = await axios.get(
-              `http://localhost:3001/locations/${location.location_id}/images`, 
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            
-            if (imageResponse.data && imageResponse.data.length > 0) {
-              // Get the cover image (is_cover = 1) or the first image
-              const coverImage = imageResponse.data.find(img => img.is_cover === 1) || imageResponse.data[0];
-              location.coverImage = coverImage.image_url;
-              location.allImages = imageResponse.data;
-            }
-          } catch (error) {
-            console.error(`Error fetching images for location ${location.location_id}:`, error);
-          }
-        }
+        // Assign the locations to the reactive property
+        this.userLocations = locations;
+        
+        // Load additional data for each location
+        this.loadLocationDetails(locations, token);
       })
       .catch(error => {
         console.error('Error loading user locations:', error);
       });
     },
     
+    // New method to load location details (images and campsite types) separately
+    loadLocationDetails(locations, token) {
+      // Process each location
+      locations.forEach(location => {
+        // Load campsite types
+        axios.get(`http://localhost:3001/locations/${location.location_id}/campsitetype`, 
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        .then(response => {
+          if (response.data && response.data.length > 0) {
+            // Use $set to ensure reactivity
+            this.$set(location, 'campsite_type_id', response.data[0].campsitetypes_id);
+            this.$set(location, 'campsite_type_name', response.data[0].name);
+          } else {
+            this.$set(location, 'campsite_type_name', 'Not specified');
+          }
+        })
+        .catch(error => {
+          console.error(`Error loading campsite type for location ${location.location_id}:`, error);
+          this.$set(location, 'campsite_type_name', 'Error loading');
+        });
+        
+        // Load images
+        axios.get(`http://localhost:3001/locations/${location.location_id}/images`, 
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        .then(response => {
+          if (response.data && response.data.length > 0) {
+            const coverImage = response.data.find(img => img.is_cover === 1) || response.data[0];
+            // Use $set to ensure reactivity
+            this.$set(location, 'coverImage', coverImage.image_url);
+            this.$set(location, 'allImages', response.data);
+          }
+        })
+        .catch(error => {
+          console.error(`Error loading images for location ${location.location_id}:`, error);
+        });
+      });
+    },
+    
+    // Helper method to get the image URL
+    getImageUrl(location) {
+      if (location && location.coverImage) {
+        return `http://localhost:3001${location.coverImage}`;
+      }
+      return ''; // Return empty string if no image
+    },
+
     loadCampsiteTypes() {
       axios.get('http://localhost:3001/locations/campsitetypes')  // Change this line
         .then(response => {
@@ -316,32 +407,31 @@ export default {
       this.errorMessage = '';
       this.successMessage = '';
       
-      // Get auth token
       const token = localStorage.getItem('token');
       if (!token) {
         this.$router.push('/login');
         return;
       }
       
-      // Check if we're editing an existing location
       const isEditing = !!this.location.location_id;
-      
-      // Create a copy of location data to send
       const locationData = { ...this.location };
       
-      // Choose the right endpoint and method
+      // Make sure we're sending the array of campsite types
+      if (!locationData.campsite_types || locationData.campsite_types.length === 0) {
+        this.errorMessage = 'Please select at least one campsite type';
+        this.isSubmitting = false;
+        return;
+      }
+      
       const method = isEditing ? 'put' : 'post';
       const url = isEditing 
         ? `http://localhost:3001/locations/${locationData.location_id}` 
         : 'http://localhost:3001/locations';
       
-      // For editing, we only send what's changed
       if (isEditing) {
-        // Remove ID from the data we're sending
         delete locationData.location_id;
       }
       
-      // Make the API call
       axios({
         method,
         url,
@@ -394,20 +484,22 @@ export default {
       });
     },
     
-    // Add a helper method to reset the form
+    // helper method to reset the form
     resetForm() {
-      // First clear all data
       this.location = {
         name: '',
         description: '',
+        address: '',
         city: '',
         country: '',
         price_per_night: null,
+        amenities: [], 
+        campsite_type_id: null,
+        campsite_types: [],
         latitude: null,
-        longitude: null,
-        amenities: [], // Empty array for amenities
-        campsite_type_id: null
+        longitude: null
       };
+      this.showManualCoordinates = false;
       this.previewImages = [];
       this.imagesToUpload = [];
       
@@ -419,16 +511,16 @@ export default {
     },
     
     editLocation(location) {
-      // Reset the form first
       this.resetForm();
       
-      // Then fill with location data
+      this.isEditing = true;
       this.location = {
         ...location,
         location_id: parseInt(location.location_id),
         price_per_night: parseFloat(location.price_per_night),
-        // Start with an empty array
-        amenities: []
+        address: location.address || '',
+        amenities: [],
+        campsite_types: [] // Initialize empty array
       };
       
       const token = localStorage.getItem('token');
@@ -439,26 +531,29 @@ export default {
       })
       .then(response => {
         console.log('Loaded amenities for editing:', response.data);
-        
-        // Update amenities with properly parsed IDs
         this.location.amenities = response.data.map(a => parseInt(a.amenity_id, 10));
-        
-        console.log('Amenities after loading:', this.location.amenities);
       })
       .catch(error => {
         console.error('Error loading amenities for editing:', error);
-        // Continue with editing even if amenities can't be loaded
       });
       
-      // Load existing images - THIS IS THE KEY ADDITION
+      // Fetch campsite types for this location
+      axios.get(`http://localhost:3001/locations/${location.location_id}/campsitetype`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then(response => {
+        this.location.campsite_types = response.data.map(t => parseInt(t.campsitetypes_id, 10));
+      })
+      .catch(error => {
+        console.error('Error loading campsite types for editing:', error);
+      });
+      
+      // Load existing images
       axios.get(`http://localhost:3001/locations/${location.location_id}/images`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(response => {
-        console.log('Loaded images for editing:', response.data);
-        
         if (response.data && response.data.length > 0) {
-          // Convert server images to the format expected by the preview
           this.previewImages = response.data.map(image => ({
             preview: `http://localhost:3001${image.image_url}`,
             id: image.image_id,
@@ -469,23 +564,23 @@ export default {
       .catch(error => {
         console.error('Error loading images for editing:', error);
       });
-      
+
       // Update UI state
       window.scrollTo(0, 0);
       this.successMessage = `You are now editing "${location.name}"`;
     },
-    
+
     deleteLocation(locationId) {
       if (!confirm('Are you sure you want to delete this location?')) {
         return;
       }
-      
+
       const token = localStorage.getItem('token');
       if (!token) {
         this.$router.push('/login');
         return;
       }
-      
+
       axios.delete(`http://localhost:3001/locations/${locationId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -542,7 +637,6 @@ export default {
       // If it's an existing image, delete it from the server
       if (imageToRemove.isExisting) {
         const token = localStorage.getItem('token');
-        
         axios.delete(`http://localhost:3001/images/${imageToRemove.id}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
@@ -567,7 +661,6 @@ export default {
       }
     },
 
-    // In your location component
     async loadLocationImages(locationId) {
       try {
         const response = await axios.get(`http://localhost:3001/images/location/${locationId}`);
@@ -583,168 +676,135 @@ export default {
 
 <style scoped>
 .manage-location {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
 }
 
-.error-message, .success-message {
-  padding: 10px;
+.manage-location h2 {
   margin-bottom: 20px;
+  text-align: center;
+}
+
+.page-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 30px;
+}
+
+@media (min-width: 992px) {
+  .page-layout {
+    grid-template-columns: 2fr 1fr;
+  }
+  
+  .location-form {
+    order: 1;
+  }
+  
+  .my-locations {
+    order: 2;
+    align-self: start;
+    position: sticky;
+    top: 20px;
+  }
+}
+
+.form-section {
+  background-color: white;
+  border: 1px solid #ddd;
   border-radius: 4px;
-}
-
-.error-message {
-  background-color: #ffebee;
-  color: #c62828;
-}
-
-.success-message {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-}
-
-.location-form {
-  background-color: #f9f9f9;
   padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+}
+
+.section-title {
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  font-size: 1.2rem;
+  color: #333;
 }
 
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
-.form-row {
-  display: flex;
-  gap: 15px;
-}
-
-.form-row .form-group {
-  flex: 1;
-}
-
-label {
+.form-group label {
   display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
-input, textarea, select {
+.required-label::after {
+  content: ' *';
+  color: red;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select,
+.form-group textarea {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 1rem;
 }
 
-textarea {
-  resize: vertical;
-}
-
-.amenities-list {
+.form-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.amenity-item {
-  display: flex;
-  align-items: center;
-}
-
-.amenity-item input {
-  width: auto;
-  margin-right: 5px;
-}
-
-.form-actions {
-  margin-top: 20px;
-}
-
-button {
-  padding: 10px 15px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.submit-btn {
-  background-color: #4CAF50;
-  color: white;
-  width: 100%;
-  font-size: 1rem;
-  padding: 12px;
-}
-
-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.my-locations {
-  margin-top: 40px;
-}
-
-.locations-list {
-  display: grid;
+  grid-template-columns: 1fr;
   gap: 15px;
 }
 
-.location-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #f9f9f9;
-  padding: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #4CAF50;
+@media (min-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
-.location-actions {
-  display: flex;
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 10px;
 }
 
-.edit-btn {
-  background-color: #2196F3;
-  color: white;
+.option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.delete-btn {
-  background-color: #f44336;
-  color: white;
+.option-item input[type="checkbox"] {
+  margin-right: 8px;
 }
 
-h4 {
-  margin: 0 0 5px 0;
+.form-info {
+  background-color: #f8f8f8;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
 }
 
-.location-details p {
-  margin: 3px 0;
-}
-
+/* Image upload styling */
 .image-upload-container {
-  border: 2px dashed #ddd;
-  padding: 15px;
-  border-radius: 8px;
+  margin-top: 10px;
 }
 
 .upload-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
   margin-bottom: 15px;
 }
 
 .preview-item {
-  width: 120px;
-  height: 120px;
   position: relative;
+  width: 100px;
+  height: 100px;
   border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #ddd;
 }
 
 .preview-image {
@@ -757,23 +817,21 @@ h4 {
   position: absolute;
   top: 5px;
   right: 5px;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background-color: rgba(0,0,0,0.6);
-  color: white;
-  font-size: 16px;
+  background-color: rgba(255,255,255,0.8);
+  border: 1px solid #ddd;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  padding: 0;
 }
 
 .upload-placeholder {
-  width: 120px;
-  height: 120px;
-  border: 2px dashed #bbb;
+  width: 100px;
+  height: 100px;
+  border: 2px dashed #ddd;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -782,12 +840,8 @@ h4 {
 }
 
 .upload-placeholder span {
-  font-size: 32px;
-  color: #bbb;
-}
-
-.upload-instructions {
-  margin-top: 10px;
+  font-size: 30px;
+  color: #ccc;
 }
 
 .file-input {
@@ -795,14 +849,120 @@ h4 {
 }
 
 .select-images-btn {
-  background-color: #2196F3;
-  color: white;
+  background-color: #f7f7f7;
+  border: 1px solid #ddd;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
   margin-top: 10px;
 }
 
 .error-text {
-  color: #c62828;
+  color: red;
   font-size: 0.9rem;
-  margin-top: 5px;
+}
+
+/* Form actions */
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.submit-btn {
+  background-color: #f7f7f7;
+  border: 1px solid #ddd;
+  padding: 12px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  flex: 1;
+}
+
+.cancel-btn {
+  background-color: #f7f7f7;
+  border: 1px solid #ddd;
+  padding: 12px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* My locations styling */
+.my-locations {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 20px;
+}
+
+.my-locations h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.location-item {
+  display: flex;
+  border-bottom: 1px solid #eee;
+  padding: 15px 0;
+}
+
+.location-image {
+  width: 120px;
+  height: 80px;
+  margin-right: 15px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.location-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.location-details {
+  flex: 1;
+}
+
+.location-details h4 {
+  margin: 0 0 8px 0;
+}
+
+.location-area, .location-price, .campsite-type {
+  margin: 0 0 5px 0;
+  font-size: 0.9rem;
+}
+
+.location-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.edit-btn, .delete-btn {
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border: 1px solid #ddd;
+  background-color: #f7f7f7;
+}
+
+.location-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f7f7f7;
+  color: #999;
+  font-size: 0.9rem;
+}
+
+/* Disabled states */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
