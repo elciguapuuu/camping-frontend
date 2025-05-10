@@ -96,6 +96,7 @@ export default {
         queryParams.query = this.searchLocation;
       }
       
+      //if the checkin checkout dates are available, display the results
       if (this.checkIn && this.checkOut) {
         queryParams.start_date = this.checkIn;
         queryParams.end_date = this.checkOut;

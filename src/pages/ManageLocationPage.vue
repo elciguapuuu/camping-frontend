@@ -1,12 +1,22 @@
 <template>
-  <div class="manage-location">
-    <h2>{{ isEditing ? 'Edit Location' : 'Create New Camping Location' }}</h2>
+  <div class="manage-location-container"> <!-- Changed class for clarity -->
+    <h2>Manage Your Locations</h2>
     
-    <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
-    <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
-    
-    <div class="page-layout">
-      <!-- Location Form -->
+    <div class="page-actions">
+      <button @click="openAddLocationForm" class="add-location-btn primary-btn">
+        <span class="icon">➕</span> Add New Location
+      </button>
+    </div>
+
+    <div v-if="errorMessage && !showLocationForm" class="error-message global-error">{{ errorMessage }}</div>
+    <div v-if="successMessage && !showLocationForm" class="success-message global-success">{{ successMessage }}</div>
+
+    <!-- Location Form Container -->
+    <div v-if="showLocationForm" class="location-form-container card">
+      <h3>{{ isEditing ? 'Edit Location' : 'Create New Camping Location' }}</h3>
+      <div v-if="errorMessage && showLocationForm" class="error-message form-error">{{ errorMessage }}</div>
+      <div v-if="successMessage && showLocationForm" class="success-message form-success">{{ successMessage }}</div>
+      
       <form @submit.prevent="handleSubmit" class="location-form">
         <!-- Basic Information Section -->
         <div class="form-section">
@@ -18,7 +28,7 @@
               type="text" 
               id="name" 
               v-model="location.name" 
-              placeholder="Enter a catchy name for your location"
+              placeholder="Enter the name of your location"
               required
             >
           </div>
@@ -210,38 +220,89 @@
         
         <!-- Submit Section -->
         <div class="form-actions">
-          <button type="submit" :disabled="isSubmitting || previewImages.length < 3" class="submit-btn">
+          <button type="submit" :disabled="isSubmitting || previewImages.length < 3" class="submit-btn primary-btn">
             {{ isSubmitting ? 'Saving...' : (isEditing ? 'Update Location' : 'Create Location') }}
           </button>
-          <button v-if="isEditing" type="button" @click="resetForm" class="cancel-btn">
-            Cancel Editing
+          <button type="button" @click="closeLocationForm" class="cancel-btn secondary-btn">
+            Cancel
           </button>
         </div>
       </form>
-      
-      <!-- My Locations Section -->
-      <div v-if="userLocations.length > 0" class="my-locations">
-        <h3>My Locations</h3>
-        <div class="locations-list">
-          <div v-for="location in userLocations" :key="location.location_id" class="location-item">
+    </div>
+    
+    <!-- My Locations Section -->
+    <div class="my-locations-section"> <!-- Renamed for clarity -->
+      <h3 v-if="userLocations.length > 0 && !showLocationForm">My Existing Locations</h3>
+      <div v-if="userLocations.length === 0 && !isLoadingLocations" class="empty-state">
+        <p>You haven't added any locations yet. Click "Add New Location" to get started!</p>
+      </div>
+      <div v-if="isLoadingLocations" class="loading-state">
+        <p>Loading your locations...</p>
+      </div>
+      <div v-else class="locations-list">
+        <div v-for="location in userLocations" :key="location.location_id" class="location-item card">
+          <div class="location-item-header">
             <div class="location-image" v-if="location.coverImage">
               <img :src="getImageUrl(location)" :alt="location.name">
             </div>
             <div v-else class="location-image location-image-placeholder">
               <span>No image</span>
             </div>
-            <div class="location-details">
+            <div class="location-summary">
               <h4>{{ location.name }}</h4>
               <p class="location-area">{{ location.city }}, {{ location.country }}</p>
               <p class="location-price">€{{ location.price_per_night }} per night</p>
               <p class="campsite-type" v-if="location.campsite_type_name">
                 {{ location.campsite_type_name }}
               </p>
-              <div class="location-actions">
-                <button @click="editLocation(location)" class="edit-btn">Edit</button>
-                <button @click="deleteLocation(location.location_id)" class="delete-btn">Delete</button>
+            </div>
+          </div>
+          
+          <div class="location-stats">
+            <p>Active Bookings: {{ location.activeBookingsCount }}</p>
+            <p>Past/Cancelled Bookings: {{ location.pastBookingsCount }}</p>
+            <div v-if="location.loadingLocationBookings">Loading booking details...</div>
+          </div>
+
+          <div class="location-actions">
+            <button @click="editLocation(location)" class="action-btn edit-btn">Edit</button>
+            <button @click="deleteLocation(location.location_id)" class="action-btn delete-btn">Delete</button>
+            <button @click="toggleBookingsDisplay(location)" class="action-btn view-bookings-btn">
+              {{ location.showBookingsSection ? 'Hide' : 'View' }} Bookings
+            </button>
+          </div>
+
+          <div v-if="location.showBookingsSection" class="location-bookings-details">
+            <h4>Bookings for {{ location.name }}</h4>
+            <div v-if="location.bookings && location.bookings.length > 0">
+              <!-- Tabs for Active/Past -->
+              <div class="booking-tabs">
+                <button @click="setActiveTab(location, 'active')" :class="{ active: location.activeTab === 'active' }">
+                  Active ({{ activeBookingsFor(location).length }})
+                </button>
+                <button @click="setActiveTab(location, 'past')" :class="{ active: location.activeTab === 'past' }">
+                  Past/Cancelled ({{ pastBookingsFor(location).length }})
+                </button>
+              </div>
+              <div v-if="location.activeTab === 'active'">
+                <ul v-if="activeBookingsFor(location).length > 0" class="booking-list">
+                  <li v-for="booking in activeBookingsFor(location)" :key="booking.booking_id">
+                    User: {{ booking.user_name }}, Dates: {{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}, Status: {{ booking.status_name }}
+                  </li>
+                </ul>
+                <p v-else>No active bookings.</p>
+              </div>
+              <div v-if="location.activeTab === 'past'">
+                <ul v-if="pastBookingsFor(location).length > 0" class="booking-list">
+                  <li v-for="booking in pastBookingsFor(location)" :key="booking.booking_id">
+                    User: {{ booking.user_name }}, Dates: {{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}, Status: {{ booking.status_name }}
+                  </li>
+                </ul>
+                <p v-else>No past or cancelled bookings.</p>
               </div>
             </div>
+            <p v-else-if="!location.loadingLocationBookings">No bookings found for this location.</p>
+            <p v-if="location.loadingLocationBookings">Loading bookings...</p>
           </div>
         </div>
       </div>
@@ -269,6 +330,10 @@ export default {
         latitude: null,
         longitude: null
       },
+      showLocationForm: false, // New: controls visibility of the add/edit form
+      isLoadingLocations: true, // New: for loading state of locations list
+      // Each location in userLocations will be augmented with:
+      // bookings: [], showBookingsSection: false, activeBookingsCount: 0, pastBookingsCount: 0, loadingLocationBookings: false, activeTab: 'active'
       showManualCoordinates: false,
       amenities: [],
       campsiteTypes: [],
@@ -282,12 +347,45 @@ export default {
       imagesToUpload: []
     }
   },
+  computed: { // New computed properties for filtering bookings per location
+    activeBookingsFor() {
+      return (location) => {
+        if (!location || !location.bookings) return [];
+        return location.bookings.filter(b => b.status_name === 'confirmed');
+      };
+    },
+    pastBookingsFor() {
+      return (location) => {
+        if (!location || !location.bookings) return [];
+        return location.bookings.filter(b => ['completed', 'cancelled'].includes(b.status_name));
+      };
+    }
+  },
   created() {
     this.loadUserLocations();
     this.loadAmenities();
     this.loadCampsiteTypes();  // Add this line
   },
   methods: {
+    formatDate(dateString) { // Helper for displaying dates
+        if (!dateString) return '';
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        return new Date(dateString).toLocaleDateString(undefined, options);
+    },
+    openAddLocationForm() {
+      this.resetForm(); // Clear form fields
+      this.isEditing = false;
+      this.showLocationForm = true;
+      this.successMessage = ''; // Clear messages when opening form
+      this.errorMessage = '';
+    },
+    closeLocationForm() {
+      this.showLocationForm = false;
+      this.resetForm(); // Also clear form fields on cancel
+    },
+    setActiveTab(location, tabName) {
+      this.$set(location, 'activeTab', tabName);
+    },
     loadAmenities() {
       const token = localStorage.getItem('token');
       
@@ -308,6 +406,7 @@ export default {
     },
     
     loadUserLocations() {
+      this.isLoadingLocations = true;
       const token = localStorage.getItem('token');
       if (!token) {
         this.$router.push('/login');
@@ -320,58 +419,61 @@ export default {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(response => {
-        // Create a copy of locations with proper reactive properties
-        const locations = response.data.map(location => {
+        const locations = response.data.map(loc => {
           return {
-            ...location,
+            ...loc,
             coverImage: null,
             allImages: [],
-            campsite_type_id: null,
-            campsite_type_name: 'Loading...'
+            // campsite_type_id: null, // Keep if used elsewhere, or remove if fully replaced
+            campsite_type_name: 'Loading...', // Keep or update based on new logic
+            bookings: [],
+            showBookingsSection: false,
+            activeBookingsCount: 0,
+            pastBookingsCount: 0,
+            loadingLocationBookings: false,
+            activeTab: 'active' // Default tab for bookings view
           };
         });
         
-        // Assign the locations to the reactive property
         this.userLocations = locations;
+        this.isLoadingLocations = false;
         
-        // Load additional data for each location
-        this.loadLocationDetails(locations, token);
+        // Load additional details (campsite type, images, and now bookings)
+        this.userLocations.forEach(detailedLoc => {
+          this.loadIndividualLocationDetails(detailedLoc, token); // Modified to take one location
+          this.fetchBookingsForLocation(detailedLoc, token); // New call
+        });
       })
       .catch(error => {
         console.error('Error loading user locations:', error);
+        this.errorMessage = 'Failed to load your locations.';
+        this.isLoadingLocations = false;
       });
     },
     
-    // New method to load location details (images and campsite types) separately
-    loadLocationDetails(locations, token) {
-      // Process each location
-      locations.forEach(location => {
-        // Load campsite types
-        axios.get(`http://localhost:3001/locations/${location.location_id}/campsitetype`, 
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
+    // Modified to handle a single location's non-booking details
+    loadIndividualLocationDetails(location, token) {
+      // Load campsite types for this specific location
+      axios.get(`http://localhost:3001/locations/${location.location_id}/campsitetype`, { headers: { Authorization: `Bearer ${token}` } })
         .then(response => {
           if (response.data && response.data.length > 0) {
-            // Use $set to ensure reactivity
-            this.$set(location, 'campsite_type_id', response.data[0].campsitetypes_id);
-            this.$set(location, 'campsite_type_name', response.data[0].name);
+            // Assuming a location might have multiple types, join their names or pick the first.
+            // For simplicity, let's assume the first one or join, adjust as needed.
+            this.$set(location, 'campsite_type_name', response.data.map(ct => ct.name).join(', ') || 'Not specified');
           } else {
             this.$set(location, 'campsite_type_name', 'Not specified');
           }
         })
         .catch(error => {
           console.error(`Error loading campsite type for location ${location.location_id}:`, error);
-          this.$set(location, 'campsite_type_name', 'Error loading');
+          this.$set(location, 'campsite_type_name', 'Error loading type');
         });
         
-        // Load images
-        axios.get(`http://localhost:3001/locations/${location.location_id}/images`, 
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
+      // Load images for this specific location
+      axios.get(`http://localhost:3001/locations/${location.location_id}/images`, { headers: { Authorization: `Bearer ${token}` } })
         .then(response => {
           if (response.data && response.data.length > 0) {
             const coverImage = response.data.find(img => img.is_cover === 1) || response.data[0];
-            // Use $set to ensure reactivity
             this.$set(location, 'coverImage', coverImage.image_url);
             this.$set(location, 'allImages', response.data);
           }
@@ -379,7 +481,40 @@ export default {
         .catch(error => {
           console.error(`Error loading images for location ${location.location_id}:`, error);
         });
-      });
+    },
+
+    async fetchBookingsForLocation(location, token) {
+      this.$set(location, 'loadingLocationBookings', true);
+      try {
+        const response = await axios.get(`http://localhost:3001/bookings/location/${location.location_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const bookingsData = response.data;
+        this.$set(location, 'bookings', bookingsData);
+
+        const activeBookings = bookingsData.filter(b => b.status_name === 'confirmed');
+        const pastBookings = bookingsData.filter(b => ['completed', 'cancelled'].includes(b.status_name));
+
+        this.$set(location, 'activeBookingsCount', activeBookings.length);
+        this.$set(location, 'pastBookingsCount', pastBookings.length);
+
+      } catch (error) {
+        console.error(`Error fetching bookings for location ${location.location_id}:`, error);
+        // Optionally set an error message on the location object
+        this.$set(location, 'errorMessageBookings', 'Could not load bookings.');
+      } finally {
+        this.$set(location, 'loadingLocationBookings', false);
+      }
+    },
+
+    toggleBookingsDisplay(location) {
+      this.$set(location, 'showBookingsSection', !location.showBookingsSection);
+      // If opening and bookings haven't been loaded (e.g., initial load failed or lazy load)
+      // For now, we load them all initially in loadUserLocations.
+      // if (location.showBookingsSection && location.bookings.length === 0 && !location.loadingLocationBookings) {
+      //   const token = localStorage.getItem('token');
+      //   this.fetchBookingsForLocation(location, token);
+      // }
     },
     
     // Helper method to get the image URL
@@ -464,15 +599,17 @@ export default {
             this.successMessage = isEditing 
               ? 'Location updated successfully!' 
               : 'Location created successfully!';
-            this.resetForm();
-            this.loadUserLocations();
+            // this.resetForm(); // resetForm is now part of closeLocationForm
+            this.loadUserLocations(); // Reload all locations
+            this.closeLocationForm(); // Close form after successful submission
           });
         } else {
           this.successMessage = isEditing 
             ? 'Location updated successfully!' 
             : 'Location created successfully!';
-          this.resetForm();
+          // this.resetForm();
           this.loadUserLocations();
+          this.closeLocationForm();
         }
       })
       .catch(error => {
@@ -508,66 +645,38 @@ export default {
       this.errorMessage = '';
       
       console.log('Form reset, amenities:', this.location.amenities);
+      this.isEditing = false; // Ensure isEditing is reset
+      this.previewImages = [];
+      this.imagesToUpload = [];
+      // Do not hide the form here, closeLocationForm will handle it.
     },
     
-    editLocation(location) {
-      this.resetForm();
+    editLocation(locationToEdit) {
+      // Deep clone locationToEdit to avoid modifying the original object in the list directly
+      this.location = JSON.parse(JSON.stringify(locationToEdit));
       
-      this.isEditing = true;
-      this.location = {
-        ...location,
-        location_id: parseInt(location.location_id),
-        price_per_night: parseFloat(location.price_per_night),
-        address: location.address || '',
-        amenities: [],
-        campsite_types: [] // Initialize empty array
-      };
+      // Ensure amenities and campsite_types are arrays of IDs
+      this.location.amenities = locationToEdit.amenities ? locationToEdit.amenities.map(a => a.amenity_id) : [];
       
-      const token = localStorage.getItem('token');
-      
-      // Fetch amenities for this location
-      axios.get(`http://localhost:3001/locations/${location.location_id}/amenities`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(response => {
-        console.log('Loaded amenities for editing:', response.data);
-        this.location.amenities = response.data.map(a => parseInt(a.amenity_id, 10));
-      })
-      .catch(error => {
-        console.error('Error loading amenities for editing:', error);
-      });
-      
-      // Fetch campsite types for this location
-      axios.get(`http://localhost:3001/locations/${location.location_id}/campsitetype`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(response => {
-        this.location.campsite_types = response.data.map(t => parseInt(t.campsitetypes_id, 10));
-      })
-      .catch(error => {
-        console.error('Error loading campsite types for editing:', error);
-      });
-      
-      // Load existing images
-      axios.get(`http://localhost:3001/locations/${location.location_id}/images`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(response => {
-        if (response.data && response.data.length > 0) {
-          this.previewImages = response.data.map(image => ({
-            preview: `http://localhost:3001${image.image_url}`,
-            id: image.image_id,
-            isExisting: true
-          }));
-        }
-      })
-      .catch(error => {
-        console.error('Error loading images for editing:', error);
-      });
+      // If campsite_types are stored as objects, map to IDs. If already IDs, this is fine.
+      // Assuming locationToEdit.campsite_types is already an array of IDs from the server or previous edits.
+      // If not, adjust this mapping.
+      this.location.campsite_types = locationToEdit.campsite_types || [];
 
-      // Update UI state
-      window.scrollTo(0, 0);
-      this.successMessage = `You are now editing "${location.name}"`;
+
+      // Handle images - existing images are not directly re-loaded into the form's preview for simplicity here.
+      // The form expects new uploads. If you need to edit existing images, that's a more complex feature.
+      this.previewImages = []; 
+      this.imagesToUpload = [];
+      // If you want to show existing images, you'd populate previewImages from locationToEdit.allImages
+      // For example:
+      // this.previewImages = locationToEdit.allImages ? locationToEdit.allImages.map(img => ({ preview: `http://localhost:3001${img.image_url}`, file: null, id: img.image_id })) : [];
+
+
+      this.isEditing = true;
+      this.showLocationForm = true;
+      this.successMessage = ''; // Clear messages
+      this.errorMessage = '';
     },
 
     deleteLocation(locationId) {
@@ -675,6 +784,208 @@ export default {
 </script>
 
 <style scoped>
+.manage-location-container {
+  max-width: 1000px;
+  margin: 20px auto;
+  padding: 20px;
+}
+
+.page-actions {
+  margin-bottom: 20px;
+}
+
+.add-location-btn {
+  padding: 10px 20px;
+  font-size: 1rem;
+  /* Add other primary button styles if not global */
+}
+
+.location-form-container.card {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin-bottom: 30px;
+}
+
+.my-locations-section h3 {
+  margin-top: 30px;
+  margin-bottom: 15px;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.locations-list {
+  display: grid;
+  gap: 20px;
+}
+
+.location-item.card {
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.location-item-header {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.location-image img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.location-image-placeholder {
+  width: 100px;
+  height: 100px;
+  background-color: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: #888;
+}
+
+.location-summary h4 {
+  margin-top: 0;
+  margin-bottom: 5px;
+  font-size: 1.2rem;
+}
+.location-summary p {
+  margin: 2px 0;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.location-stats {
+  margin-bottom: 10px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.location-stats p {
+  margin: 5px 0;
+}
+
+.location-actions {
+  margin-top: auto; /* Pushes actions to the bottom if item is flex column */
+  display: flex;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.location-bookings-details {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f7f9fc;
+  border-radius: 6px;
+  border: 1px solid #e0e6ed;
+}
+.location-bookings-details h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+.booking-tabs {
+  margin-bottom: 10px;
+}
+.booking-tabs button {
+  padding: 8px 12px;
+  margin-right: 5px;
+  border: 1px solid #ccc;
+  background-color: #f0f0f0;
+  cursor: pointer;
+}
+.booking-tabs button.active {
+  background-color: #42b983;
+  color: white;
+  border-color: #42b983;
+}
+.booking-list {
+  list-style: none;
+  padding-left: 0;
+}
+.booking-list li {
+  padding: 5px 0;
+  font-size: 0.9rem;
+  border-bottom: 1px dashed #eee;
+}
+.booking-list li:last-child {
+  border-bottom: none;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  color: #777;
+}
+.loading-state {
+  text-align: center;
+  padding: 20px;
+  color: #777;
+}
+
+/* Add styles for primary-btn, secondary-btn if not globally defined */
+.primary-btn {
+  background-color: #42b983;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.primary-btn:hover {
+  background-color: #36a476;
+}
+.secondary-btn {
+  background-color: #ccc;
+  color: #333;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.secondary-btn:hover {
+  background-color: #bbb;
+}
+.form-error, .global-error {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+.form-success, .global-success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+/* Responsive adjustments if needed */
+@media (max-width: 768px) {
+  .location-item-header {
+    flex-direction: column;
+  }
+  .location-image, .location-image-placeholder {
+    width: 100%; /* Full width on small screens */
+    height: 150px; /* Adjust height as needed */
+  }
+}
+
 .manage-location {
   max-width: 1200px;
   margin: 0 auto;

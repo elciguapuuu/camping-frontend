@@ -9,7 +9,7 @@
     
     <div class="navbar-right">
       <router-link v-if="isAuthenticated" to="/manage-location" class="nav-link host-link">
-        Become a Host
+        Manage locations
       </router-link>
       
       <!-- Login and Register buttons when NOT authenticated -->

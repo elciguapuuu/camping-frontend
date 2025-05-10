@@ -35,7 +35,7 @@
         <div>
           <h2>{{ location.name }}</h2>
           <p class="location-address">{{ location.address }}, {{ location.city }}, {{ location.country }}</p>
-          <p class="location-host">Hosted by {{ location.owner_name || 'Unknown Host' }}</p>
+          
         </div>
         <div class="location-rating" v-if="averageRating">
           <div class="stars">★ {{ averageRating.toFixed(1) }}</div>

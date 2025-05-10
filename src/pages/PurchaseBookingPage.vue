@@ -68,6 +68,7 @@
                     id="pay-later" 
                     value="pay-later" 
                     v-model="booking.paymentMethod"
+                    @change="destroyCardElement" 
                     checked
                   >
                   <label for="pay-later">Pay on arrival</label>
@@ -78,14 +79,21 @@
                     id="pay-now" 
                     value="pay-now" 
                     v-model="booking.paymentMethod"
+                    @change="initializeStripeAndElements" 
                   >
-                  <label for="pay-now">Pay now (Coming soon)</label>
+                  <label for="pay-now">Pay now</label>
                 </div>
               </div>
               
               <div v-if="booking.paymentMethod === 'pay-now'" class="payment-details">
-                <p class="coming-soon">Online payment is coming soon!</p>
-                <p>For now, all bookings are processed as "Pay on arrival".</p>
+                <!-- Stripe Card Element will be mounted here -->
+                <div id="card-element" class="stripe-card-element"></div>
+                <!-- Used to display form errors from Stripe -->
+                <div id="card-errors" role="alert" class="stripe-error-message">{{ stripeError }}</div>
+                <div v-if="isStripeLoading" class="loading-inline">
+                  <div class="loader-small"></div>
+                  <span>Loading payment form...</span>
+                </div>
               </div>
             </div>
 
@@ -93,9 +101,9 @@
               <button 
                 type="submit" 
                 class="submit-btn" 
-                :disabled="isSubmitting || invalidDates"
+                :disabled="isSubmitting || invalidDates || (booking.paymentMethod === 'pay-now' && !isStripeReady)"
               >
-                {{ isSubmitting ? 'Processing...' : 'Confirm Booking' }}
+                {{ isSubmitting ? 'Processing...' : (booking.paymentMethod === 'pay-now' ? 'Confirm and Pay' : 'Confirm Booking') }}
               </button>
             </div>
           </form>
@@ -158,6 +166,7 @@
 
 <script>
 import axios from 'axios';
+import { loadStripe } from '@stripe/stripe-js';
 
 export default {
   name: 'PurchaseBookingPage',
@@ -174,18 +183,25 @@ export default {
       booking: {
         startDate: '',
         endDate: '',
-        paymentMethod: 'pay-later'
+        paymentMethod: 'pay-later' // Default to pay-later
       },
       isLoading: true,
       isSubmitting: false,
       errorMessage: '',
       showSuccessModal: false,
-      bookingReference: ''
+      bookingReference: '',
+      stripe: null,
+      cardElement: null,
+      stripePublishableKey:'pk_test_51RNJCpC7clHoe0VPx8EdUqGxdijFzgzo0E85FEKC0iQzD0oS3TBgPW30ZmIlOqtAPMBkr8rJYrRrl67PXqJv9tXQ00nYqOLRJo',
+      isStripeLoading: false,
+      isStripeReady: false,
+      stripeError: '',
     }
   },
   computed: {
     minDate() {
       const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalize to start of day
       return today.toISOString().split('T')[0];
     },
     minEndDate() {
@@ -226,8 +242,19 @@ export default {
       
       const start = new Date(this.booking.startDate);
       const end = new Date(this.booking.endDate);
-      
-      return start >= end;
+      const today = new Date(this.minDate); // Use normalized today from minDate
+
+      // Check if start date is before today or if start date is after or same as end date
+      return start < today || start >= end;
+    }
+  },
+  watch: {
+    'booking.paymentMethod'(newValue) {
+      if (newValue === 'pay-now') {
+        this.initializeStripeAndElements();
+      } else {
+        this.destroyCardElement();
+      }
     }
   },
   created() {
@@ -238,19 +265,33 @@ export default {
     initializeBookingDates() {
       // Get dates from query params if available
       const { start_date, end_date } = this.$route.query;
-      
+      const todayString = this.minDate; // Use normalized today string
+
       if (start_date) {
-        this.booking.startDate = start_date;
+        // Ensure start_date from query is not in the past
+        this.booking.startDate = start_date < todayString ? todayString : start_date;
+      } else {
+        // Default start date to today if not provided
+        this.booking.startDate = todayString;
       }
       
       if (end_date) {
-        this.booking.endDate = end_date;
-      } else if (this.booking.startDate) {
-        // Set end date to start date + 1 day if only start date is provided
-        const startDate = new Date(this.booking.startDate);
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 1);
-        this.booking.endDate = endDate.toISOString().split('T')[0];
+        // Ensure end_date is valid in relation to the (potentially adjusted) start_date
+        const startDateObj = new Date(this.booking.startDate);
+        const endDateObj = new Date(end_date);
+        if (endDateObj <= startDateObj) {
+          const nextDay = new Date(startDateObj);
+          nextDay.setDate(nextDay.getDate() + 1);
+          this.booking.endDate = nextDay.toISOString().split('T')[0];
+        } else {
+          this.booking.endDate = end_date;
+        }
+      } else {
+        // Set end date to start date + 1 day if only start date is provided or adjusted
+        const startDateObj = new Date(this.booking.startDate);
+        const nextDay = new Date(startDateObj);
+        nextDay.setDate(nextDay.getDate() + 1);
+        this.booking.endDate = nextDay.toISOString().split('T')[0];
       }
     },
     
@@ -325,65 +366,217 @@ export default {
       }
     },
     
-    handleBooking() {
+    async initializeStripeAndElements() {
+      if (!this.stripePublishableKey || this.stripePublishableKey === 'YOUR_STRIPE_PUBLISHABLE_KEY') {
+        console.error('Stripe publishable key is not set.');
+        this.stripeError = 'Payment gateway is not configured. Please add your Stripe Publishable Key.';
+        this.isStripeLoading = false;
+        return;
+      }
+
+      if (this.stripe && this.cardElement) {
+        this.isStripeReady = true;
+        return; // Already initialized
+      }
+
+      this.isStripeLoading = true;
+      this.stripeError = '';
+
+      try {
+        this.stripe = await loadStripe(this.stripePublishableKey);
+        if (!this.stripe) {
+          throw new Error('Stripe.js failed to load.');
+        }
+        
+        const elements = this.stripe.elements();
+        this.cardElement = elements.create('card', {
+          style: {
+            base: {
+              color: "#32325d",
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+              fontSmoothing: "antialiased",
+              fontSize: "16px",
+              "::placeholder": {
+                color: "#aab7c4"
+              }
+            },
+            invalid: {
+              color: "#fa755a",
+              iconColor: "#fa755a"
+            }
+          }
+        });
+        
+        // Wait for the DOM to update if #card-element is not immediately available
+        this.$nextTick(() => {
+          const cardElementDiv = document.getElementById('card-element');
+          if (cardElementDiv && !cardElementDiv.hasChildNodes()) { // Mount only if not already mounted
+             this.cardElement.mount('#card-element');
+             this.cardElement.on('ready', () => {
+                this.isStripeReady = true;
+                this.isStripeLoading = false;
+             });
+             this.cardElement.on('change', (event) => {
+                if (event.error) {
+                  this.stripeError = event.error.message;
+                } else {
+                  this.stripeError = '';
+                }
+             });
+          } else if (cardElementDiv && cardElementDiv.hasChildNodes()) {
+            // Already mounted, or div not clean
+            this.isStripeReady = true; // Assume it's ready if children exist
+            this.isStripeLoading = false;
+          } else {
+            console.error('Stripe card element div not found');
+            this.stripeError = 'Could not initialize payment form.';
+            this.isStripeLoading = false;
+          }
+        });
+
+      } catch (error) {
+        console.error('Error initializing Stripe:', error);
+        this.stripeError = error.message || 'Failed to initialize payment form.';
+        this.isStripeLoading = false;
+        this.isStripeReady = false;
+      }
+    },
+
+    destroyCardElement() {
+      if (this.cardElement) {
+        this.cardElement.unmount();
+        this.cardElement.destroy();
+        this.cardElement = null;
+        this.isStripeReady = false;
+        this.stripeError = '';
+      }
+      // Also clear Stripe instance if not needed, or keep it if user might switch back
+      // this.stripe = null; 
+    },
+
+    async handleBooking() {
       if (this.invalidDates) {
         return;
       }
       
       this.isSubmitting = true;
-      this.errorMessage = ''; // Clear previous errors
+      this.errorMessage = '';
+      this.stripeError = '';
       
       const token = localStorage.getItem('token');
       if (!token) {
         this.$router.push('/login');
+        this.isSubmitting = false;
         return;
       }
-      
+
+      if (this.booking.paymentMethod === 'pay-now') {
+        if (!this.stripe || !this.cardElement || !this.isStripeReady) {
+          this.stripeError = 'Payment form is not ready. Please wait or try again.';
+          this.isSubmitting = false;
+          return;
+        }
+
+        try {
+          // 1. Create Payment Intent on the backend
+          const paymentIntentResponse = await axios.post('http://localhost:3001/api/payments/create-payment-intent', {
+            // IMPORTANT: Backend needs to be updated to accept amount directly
+            // and not rely on booking_id to fetch it.
+            amount: this.finalTotal, // Send amount in base currency unit (e.g., EUR)
+            currency: 'eur', // Or your desired currency
+            location_id: parseInt(this.$route.params.id),
+            // You might want to send other booking details for metadata
+            // start_date: this.booking.startDate,
+            // end_date: this.booking.endDate,
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          const clientSecret = paymentIntentResponse.data.clientSecret;
+          if (!clientSecret) {
+            throw new Error('Failed to get payment client secret.');
+          }
+
+          // 2. Confirm the card payment with Stripe.js
+          const { paymentIntent, error: stripePaymentError } = await this.stripe.confirmCardPayment(
+            clientSecret, {
+              payment_method: {
+                card: this.cardElement,
+                // billing_details: { name: 'Jenny Rosen' }, // Optional: Add billing details
+              }
+            }
+          );
+
+          if (stripePaymentError) {
+            this.stripeError = stripePaymentError.message || 'Payment failed. Please check your card details.';
+            this.isSubmitting = false;
+            return;
+          }
+
+          if (paymentIntent && paymentIntent.status === 'succeeded') {
+            // 3. Payment successful, now create the booking in your system
+            await this.createBookingInSystem(token, paymentIntent.id);
+          } else {
+            this.stripeError = 'Payment was not successful. Please try again.';
+            this.isSubmitting = false;
+          }
+
+        } catch (error) {
+          console.error('Payment processing error:', error);
+          this.errorMessage = error.response?.data?.error || error.message || 'An error occurred during payment processing.';
+          this.isSubmitting = false;
+        }
+
+      } else { // 'pay-later'
+        await this.createBookingInSystem(token);
+      }
+    },
+
+    async createBookingInSystem(token, stripePaymentIntentId = null) {
       const locationId = this.$route.params.id;
+      const formatDate = (dateString) => new Date(dateString).toISOString().split('T')[0];
       
-      // Format dates in YYYY-MM-DD format to ensure consistency
-      const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toISOString().split('T')[0];
-      };
-      
-      // Create booking data object with properly formatted dates
       const bookingData = {
         location_id: parseInt(locationId),
         start_date: formatDate(this.booking.startDate),
         end_date: formatDate(this.booking.endDate),
-        total_price: this.finalTotal
+        total_price: this.finalTotal,
+        // Add stripe_payment_intent_id if payment was made
+        // Backend POST /bookings needs to be updated to save this
+        ...(stripePaymentIntentId && { stripe_payment_intent_id: stripePaymentIntentId })
       };
       
-      console.log('Sending booking data:', bookingData);
-      
-      // Submit booking to API
-      axios.post('http://localhost:3001/bookings', bookingData, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-        .then(response => {
-          console.log('Booking success response:', response.data);
-          
-          // Generate a booking reference
-          this.bookingReference = response.data.booking_id || '';
-          
-          // Show success modal
-          this.showSuccessModal = true;
-          this.isSubmitting = false;
-        })
-        .catch(error => {
-          console.error('Booking error:', error);
-          
-          // Handle specific error messages from the backend
-          if (error.response && error.response.data && error.response.data.error) {
-            this.errorMessage = error.response.data.error;
-          } else {
-            this.errorMessage = 'Failed to complete booking. Please try again.';
-          }
-          
-          this.isSubmitting = false;
+      console.log('Sending booking data to system:', bookingData);
+
+      try {
+        const response = await axios.post('http://localhost:3001/bookings', bookingData, {
+          headers: { Authorization: `Bearer ${token}` }
         });
+        
+        console.log('Booking creation system response:', response.data);
+        this.bookingReference = response.data.booking_id || '';
+        this.showSuccessModal = true;
+
+      } catch (error) {
+        console.error('System booking error:', error);
+        this.errorMessage = error.response?.data?.error || 'Failed to save booking after payment. Please contact support.';
+        // If payment was made but booking failed, this is a critical issue to log/handle.
+        if (stripePaymentIntentId) {
+            this.errorMessage += ` (Payment ID: ${stripePaymentIntentId})`;
+        }
+      } finally {
+        this.isSubmitting = false;
+      }
     }
+  },
+  mounted() {
+    // If pay-now is somehow pre-selected (e.g. due to browser cache), initialize Stripe
+    if (this.booking.paymentMethod === 'pay-now') {
+      this.initializeStripeAndElements();
+    }
+  },
+  beforeDestroy() {
+    this.destroyCardElement();
   }
 }
 </script>
@@ -705,5 +898,39 @@ export default {
   padding: 15px;
   border-radius: 4px;
   margin: 20px 0;
+}
+
+.stripe-card-element {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  margin-bottom: 10px; /* Add some space before the error message */
+}
+
+.stripe-error-message {
+  color: #fa755a; /* Stripe's error color */
+  font-size: 0.9rem;
+  margin-top: 5px;
+  min-height: 1.2em; /* Reserve space for error message */
+}
+
+.loading-inline {
+  display: flex;
+  align-items: center;
+  /* justify-content: center; */ /* If you want it centered */
+  padding: 10px 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.loader-small {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #42b983;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
 }
 </style>

@@ -118,73 +118,117 @@
         <!-- Bookings section (shown when not in edit mode) -->
         <div v-else class="section bookings">
           <h3 class="section-title">My Bookings</h3>
+
+          <div class="bookings-filter">
+            <button @click="showExpiredBookings = false" :class="{ active: !showExpiredBookings }">Active</button>
+            <button @click="showExpiredBookings = true" :class="{ active: showExpiredBookings }">Expired/Cancelled</button>
+          </div>
           
           <div v-if="loadingBookings" class="loading-inline">
             <div class="loader-small"></div>
             <span>Loading bookings...</span>
           </div>
           
-          <div v-else-if="userBookings.length === 0" class="empty-state">
-            <div class="empty-icon">🏕️</div>
-            <p>You haven't made any bookings yet.</p>
-            <router-link to="/" class="primary-btn">Find Camping Spots</router-link>
-          </div>
-          
-          <div v-else class="bookings-list">
-            <div v-for="booking in userBookings" :key="booking.booking_id" class="booking-card">
-              <div class="booking-image">
-                <img 
-                  v-if="booking.location && booking.location.coverImage" 
-                  :src="`http://localhost:3001${booking.location.coverImage}`" 
-                  :alt="booking.location ? booking.location.name : 'Booking'"
-                />
-                <div v-else class="placeholder-image">
-                  <span>No image</span>
+          <!-- Active Bookings -->
+          <div v-if="!showExpiredBookings">
+            <div v-if="activeBookings.length === 0 && !loadingBookings" class="empty-state">
+              <div class="empty-icon">🏕️</div>
+              <p>You haven't made any active bookings yet.</p>
+              <router-link to="/" class="primary-btn">Find Camping Spots</router-link>
+            </div>
+            <div v-else class="bookings-list">
+              <div v-for="booking in activeBookings" :key="booking.booking_id" class="booking-card">
+                <div class="booking-image">
+                  <img 
+                    v-if="booking.cover_image_url" 
+                    :src="`http://localhost:3001${booking.cover_image_url}`" 
+                    :alt="booking.location_name || 'Booking'"
+                  />
+                  <div v-else class="placeholder-image">
+                    <span>No image</span>
+                  </div>
+                </div>
+                <div class="booking-details">
+                  <h4 class="booking-location">{{ booking.location_name || 'Unknown Location' }}</h4>
+                  <div class="booking-info">
+                    <div class="info-row">
+                      <span class="info-label">Dates:</span>
+                      <span class="info-value">{{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">Total:</span>
+                      <span class="info-value price">€{{ formatPrice(booking.total_price) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">Status:</span>
+                      <span class="info-value status" :class="getStatusClass(booking.status_name)">
+                        {{ booking.status_name }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="booking-actions">
+                    <router-link 
+                      :to="`/location/${booking.location_id}`" 
+                      class="view-location-btn"
+                      v-if="booking.location_id"
+                    >
+                      View Location
+                    </router-link>
+                    <button 
+                      @click="cancelBooking(booking.booking_id)"
+                      class="cancel-booking-btn"
+                      v-if="canBeCancelled(booking)"
+                      :disabled="isCancelling === booking.booking_id"
+                    >
+                      {{ isCancelling === booking.booking_id ? 'Cancelling...' : 'Cancel Booking' }}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div class="booking-details">
-                <h4 class="booking-location">{{ booking.location ? booking.location.name : 'Unknown Location' }}</h4>
-                
-                <div class="booking-info">
-                  <div class="info-row">
-                    <span class="info-label">Dates:</span>
-                    <span class="info-value">{{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</span>
-                  </div>
-                  
-                  <div class="info-row">
-                    <span class="info-label">Guests:</span>
-                    <span class="info-value">{{ booking.number_of_guests }}</span>
-                  </div>
-                  
-                  <div class="info-row">
-                    <span class="info-label">Total:</span>
-                    <span class="info-value price">€{{ formatPrice(booking.total_price) }}</span>
-                  </div>
-                  
-                  <div class="info-row">
-                    <span class="info-label">Status:</span>
-                    <span class="info-value status" :class="getStatusClass(booking.status_id)">
-                      {{ getStatusText(booking.status_id) }}
-                    </span>
+            </div>
+          </div>
+
+          <!-- Expired/Cancelled Bookings -->
+          <div v-if="showExpiredBookings">
+            <div v-if="expiredBookings.length === 0 && !loadingBookings" class="empty-state">
+              <div class="empty-icon">⏳</div>
+              <p>No expired or long-cancelled bookings found.</p>
+            </div>
+            <div v-else class="bookings-list">
+              <div v-for="booking in expiredBookings" :key="booking.booking_id" class="booking-card expired-card">
+                <div class="booking-image">
+                  <img 
+                    v-if="booking.cover_image_url" 
+                    :src="`http://localhost:3001${booking.cover_image_url}`" 
+                    :alt="booking.location_name || 'Booking'"
+                  />
+                  <div v-else class="placeholder-image">
+                    <span>No image</span>
                   </div>
                 </div>
-                
-                <div class="booking-actions">
-                  <router-link 
-                    :to="`/location/${booking.location_id}`" 
-                    class="view-location-btn"
-                    v-if="booking.location"
-                  >
-                    View Location
-                  </router-link>
-                  <button 
-                    @click="cancelBooking(booking.booking_id)"
-                    class="cancel-booking-btn"
-                    v-if="canBeCancelled(booking)"
-                    :disabled="isCancelling === booking.booking_id"
-                  >
-                    {{ isCancelling === booking.booking_id ? 'Cancelling...' : 'Cancel Booking' }}
-                  </button>
+                <div class="booking-details">
+                  <h4 class="booking-location">{{ booking.location_name || 'Unknown Location' }}</h4>
+                  <div class="booking-info">
+                    <div class="info-row">
+                      <span class="info-label">Dates:</span>
+                      <span class="info-value">{{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">Total:</span>
+                      <span class="info-value price">€{{ formatPrice(booking.total_price) }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">Status:</span>
+                      <span class="info-value status" :class="getStatusClass(booking.status_name)">
+                        {{ booking.status_name }}
+                      </span>
+                    </div>
+                     <div class="info-row" v-if="booking.status_name === 'cancelled'">
+                      <span class="info-label">Cancelled:</span>
+                      <span class="info-value">{{ formatDateTime(booking.updated_at) }}</span>
+                    </div>
+                  </div>
+                  <!-- No actions for expired bookings usually -->
                 </div>
               </div>
             </div>
@@ -193,7 +237,7 @@
         
         <!-- Profile navigation (shown when not in edit mode) -->
         <div v-if="!editMode" class="profile-navigation">
-          <router-link to="/manage-locations" class="nav-item">
+          <router-link to="/manage-location" class="nav-item">
             <i class="icon">🏕️</i>
             <span>Manage Locations</span>
           </router-link>
@@ -313,6 +357,7 @@ export default {
       deleteError: '',
       isOAuthUser: false,
       userBookings: [],
+      showExpiredBookings: false, // New data property
       isCancelling: null,
       previewImage: null,
       profilePictureSelected: false
@@ -320,6 +365,34 @@ export default {
   },
   created() {
     this.loadUserProfile();
+  },
+  computed: {
+    activeBookings() {
+      return this.userBookings.filter(booking => {
+        if (booking.status_name === 'cancelled') {
+          const cancelledAt = new Date(booking.updated_at);
+          const now = new Date();
+          const hoursSinceCancellation = (now - cancelledAt) / (1000 * 60 * 60);
+          // Keep recently cancelled in active list if that's desired
+          return hoursSinceCancellation < 24;
+        }
+        // Only 'confirmed' bookings are active (besides recent cancels)
+        return booking.status_name === 'confirmed';
+      });
+    },
+    expiredBookings() {
+      return this.userBookings.filter(booking => {
+        if (booking.status_name === 'completed') {
+          return true;
+        }
+        if (booking.status_name === 'cancelled') {
+          const cancelledAt = new Date(booking.updated_at);
+          const hoursSinceCancellation = (new Date() - cancelledAt) / (1000 * 60 * 60);
+          return hoursSinceCancellation >= 24; // Older than or equal to 24 hours
+        }
+        return false; // Not 'completed' and not an older 'cancelled' booking
+      });
+    }
   },
   methods: {
     loadUserProfile() {
@@ -378,24 +451,26 @@ export default {
           `http://localhost:3001${response.data.profile_picture_url}` : null;
         
         // Update the user data in localStorage to ensure profile_picture_url is present
-        const userData = JSON.parse(localStorage.getItem('user'));
-        userData.name = response.data.name;
-        userData.email = response.data.email;
-        userData.profile_picture_url = response.data.profile_picture_url;
-        localStorage.setItem('user', JSON.stringify(userData));
+        const storedUserData = JSON.parse(localStorage.getItem('user'));
+        if (storedUserData) {
+            storedUserData.name = response.data.name;
+            storedUserData.email = response.data.email;
+            storedUserData.profile_picture_url = response.data.profile_picture_url;
+            localStorage.setItem('user', JSON.stringify(storedUserData));
+        }
         
-        // Check if this is an OAuth user
         this.isOAuthUser = response.data.auth_type === 'google';
         
-        // Initialize updatedUser with current values
         this.updatedUser.name = this.user.name;
         this.updatedUser.email = this.user.email;
         
-        // Force update navbar with current profile picture
         this.$root.$emit('auth-changed');
         
-        // Load user bookings
-        this.loadUserBookings(token);
+        // Load user bookings and then set isLoading to false
+        this.loadUserBookings(token)
+          .finally(() => {
+            this.isLoading = false; 
+          });
       })
       .catch(error => {
         console.error('Error fetching user profile:', error);
@@ -423,106 +498,29 @@ export default {
           this.errorMessage = error.message || 'Failed to load profile';
           this.isLoading = false;
         }
+        this.isLoading = false; // Ensure isLoading is false on profile fetch error
       });
     },
     
     loadUserBookings(token) {
       this.loadingBookings = true;
-      
-      // Check if token and user ID are still valid
-      if (!token || !this.user.id) {
-        console.error('Missing token or user ID for loading bookings');
-        this.loadingBookings = false;
-        this.isLoading = false;
-        return;
-      }
-      
-      console.log('Fetching bookings for user ID:', this.user.id);
-      
-      axios.get(`http://localhost:3001/bookings/user/${this.user.id}`, {
+      // Return the Axios promise
+      return axios.get(`http://localhost:3001/bookings/user/${this.user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(response => {
         console.log('User bookings response:', response.data);
-        this.userBookings = response.data || [];
-        
-        // Only load location details if we have bookings
-        if (this.userBookings.length > 0) {
-          this.loadBookingLocationDetails(token);
-        } else {
-          this.isLoading = false;
-          this.loadingBookings = false;
-        }
+        this.userBookings = response.data;
+        // this.isLoading = false; // Moved to the caller's .finally()
       })
       .catch(error => {
-        console.error('Error loading bookings:', error);
-        this.errorMessage = 'Failed to load bookings';
-        this.isLoading = false;
-        this.loadingBookings = false;
-        this.userBookings = []; // Reset to empty array on error
+        console.error('Error fetching user bookings:', error);
+        this.errorMessage = 'Failed to load bookings. Please try again.';
+        // this.isLoading = false; // Moved to the caller's .finally()
+      })
+      .finally(() => {
+        this.loadingBookings = false; // This handles the bookings-specific loader
       });
-    },
-    
-    async loadBookingLocationDetails(token) {
-      try {
-        // Process bookings one by one to avoid overwhelming the server
-        for (const booking of this.userBookings) {
-          try {
-            // Ensure the booking total_price is a number
-            if (booking.total_price !== undefined && booking.total_price !== null) {
-              booking.total_price = parseFloat(booking.total_price);
-              if (isNaN(booking.total_price)) {
-                booking.total_price = 0;
-              }
-            } else {
-              booking.total_price = 0;
-            }
-            
-            // Wrap each booking's processing in its own try-catch to prevent one failed booking 
-            // from stopping the entire process
-            if (!booking.location_id) {
-              console.warn('Booking missing location_id:', booking);
-              continue;
-            }
-            
-            // Load location details
-            const locationResponse = await axios.get(`http://localhost:3001/locations/${booking.location_id}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            
-            if (!locationResponse.data) {
-              console.warn('Empty location response for booking:', booking);
-              continue;
-            }
-            
-            const location = locationResponse.data;
-            
-            // Load location image
-            try {
-              const imagesResponse = await axios.get(`http://localhost:3001/locations/${booking.location_id}/images`);
-              if (imagesResponse.data && imagesResponse.data.length > 0) {
-                const coverImage = imagesResponse.data.find(img => img.is_cover === 1) || imagesResponse.data[0];
-                location.coverImage = coverImage.image_url;
-              }
-            } catch (imageError) {
-              console.error('Error loading images for location:', imageError);
-              // Continue processing even if images fail to load
-            }
-            
-            // Instead of modifying the original array with this.$set, create a copy with the new data
-            booking.location = location;
-          } catch (bookingError) {
-            console.error(`Error loading details for booking ${booking.booking_id}:`, bookingError);
-            // Continue processing other bookings even if one fails
-          }
-        }
-      } catch (error) {
-        console.error('Error in loadBookingLocationDetails:', error);
-      } finally {
-        // Always set loading states to false when done, regardless of success or failure
-        this.isLoading = false;
-        this.loadingBookings = false;
-      }
     },
     
     toggleEditMode() {
@@ -733,6 +731,12 @@ export default {
       }
     },
     
+    formatDateTime(dateTimeString) {
+      if (!dateTimeString) return 'N/A';
+      const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+      return new Date(dateTimeString).toLocaleDateString(undefined, options);
+    },
+
     formatPrice(price) {
       if (price === null || price === undefined) {
         return '0.00';
@@ -763,47 +767,65 @@ export default {
       return statuses[statusId] || 'Unknown';
     },
     
-    getStatusClass(statusId) {
-      const classes = {
-        5: 'status-pending',
-        6: 'status-confirmed',
-        7: 'status-cancelled',
-        8: 'status-completed'
-      };
-      return classes[statusId] || '';
+    getStatusClass(statusName) {
+      if (!statusName) return 'status-unknown';
+      return `status-${statusName.toLowerCase().replace(' ', '-')}`;
     },
     
     canBeCancelled(booking) {
-      // Only pending or confirmed bookings can be cancelled
-      return booking.status_id === 5 || booking.status_id === 6;
+      // Only 'confirmed' bookings can be cancelled
+      return booking.status_name === 'confirmed';
     },
     
-    cancelBooking(bookingId) {
-      if (!confirm('Are you sure you want to cancel this booking?')) {
+    async cancelBooking(bookingId) {
+      // Find the booking to check its payment type
+      const bookingToCancel = this.userBookings.find(b => b.booking_id === bookingId);
+      if (!bookingToCancel) {
+        this.errorMessage = "Could not find booking to cancel.";
+        return;
+      }
+
+      let confirmationMessage = "Are you sure you want to cancel this booking?";
+      // Check if the booking was paid via Stripe (has a stripe_payment_intent_id)
+      // and its status is 'confirmed' (which implies it was paid)
+      if (bookingToCancel.stripe_payment_intent_id && bookingToCancel.status_name === 'confirmed') {
+        confirmationMessage += " A refund will be processed for the paid amount.";
+      } else if (bookingToCancel.status_name === 'confirmed') {
+        // If it's 'confirmed' but no Stripe ID, it might be an older "Pay on Arrival"
+        confirmationMessage += " This was a 'Pay on Arrival' booking, so no refund is applicable through this system.";
+      }
+
+
+      if (!confirm(confirmationMessage)) {
         return;
       }
       
       this.isCancelling = bookingId;
+      this.errorMessage = '';
+      this.successMessage = '';
       const token = localStorage.getItem('token');
       
-      axios.patch(`http://localhost:3001/bookings/${bookingId}/cancel`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(() => {
+      try {
+        await axios.patch(`http://localhost:3001/bookings/${bookingId}/cancel`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
         // Update booking status in the local array
         const booking = this.userBookings.find(b => b.booking_id === bookingId);
         if (booking) {
           booking.status_id = 7; // Updated to status_id 7 for 'Cancelled'
+          booking.status_name = 'cancelled'; // Also update the name for immediate UI feedback
+          booking.updated_at = new Date().toISOString(); // Reflect cancellation time
         }
         
-        this.successMessage = 'Booking cancelled successfully';
-      })
-      .catch(error => {
-        this.errorMessage = error.response?.data?.error || 'Failed to cancel booking';
-      })
-      .finally(() => {
+        this.successMessage = 'Booking cancelled successfully.';
+        // Potentially refresh all bookings to get the latest state from server
+        // await this.loadUserBookings(token); // Uncomment if you prefer to reload all
+      } catch (error) {
+        this.errorMessage = error.response?.data?.error || 'Failed to cancel booking. Please try again.';
+      } finally {
         this.isCancelling = null;
-      });
+      }
     }
   },
   mounted() {
@@ -1533,5 +1555,54 @@ button:disabled {
   .form-actions, .modal-actions {
     flex-direction: column;
   }
+}
+
+.bookings-filter {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.bookings-filter button {
+  padding: 8px 15px;
+  border: 1px solid #ccc;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.bookings-filter button.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.bookings-filter button:hover:not(.active) {
+  background-color: #e9e9e9;
+}
+
+.booking-card.expired-card {
+  opacity: 0.7;
+  border-left: 5px solid #6c757d; /* Grey border for expired */
+}
+
+.status-confirmed {
+  color: #28a745; /* Green */
+  font-weight: bold;
+}
+
+.status-cancelled {
+  color: #dc3545; /* Red */
+  font-weight: bold;
+}
+
+.status-completed {
+  color: #17a2b8; /* Teal */
+  font-weight: bold;
+}
+
+.status-unknown {
+  color: #6c757d; /* Grey */
 }
 </style>
