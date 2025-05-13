@@ -14,7 +14,7 @@
       <div class="image-gallery">
         <div class="main-image">
           <img 
-            :src="currentImage ? `http://localhost:3001${currentImage}` : 'https://via.placeholder.com/600x400?text=No+Image'" 
+            :src="currentImage ? currentImage : 'https://via.placeholder.com/600x400?text=No+Image'" 
             :alt="location.name"
           />
         </div>
@@ -26,7 +26,7 @@
             :class="{ active: currentImage === image.image_url }"
             @click="currentImage = image.image_url"
           >
-            <img :src="`http://localhost:3001${image.image_url}`" :alt="location.name" />
+            <img :src="image.image_url" :alt="location.name" />
           </div>
         </div>
       </div>
@@ -34,7 +34,7 @@
       <div class="location-header">
         <div>
           <h2>{{ location.name }}</h2>
-          <p class="location-address">{{ location.address }}, {{ location.city }}, {{ location.country }}</p>
+          <p class="location-address">{{ location.address }}</p>
           
         </div>
         <div class="location-rating" v-if="averageRating">
@@ -73,8 +73,7 @@
             <div class="map-container">
               <MapComponent 
                 v-if="location.latitude && location.longitude"
-                :latitude="parseFloat(location.latitude)" 
-                :longitude="parseFloat(location.longitude)"
+                :locations="[{ latitude: parseFloat(location.latitude), longitude: parseFloat(location.longitude), name: location.name, location_id: location.location_id }]" 
                 map-id="location-map"
               />
               <div v-else class="no-map">
@@ -95,19 +94,38 @@
             </div>
             
             <div class="booking-dates">
-              <div class="date-inputs">
-                <div class="date-input">
-                  <label for="check-in">Check in</label>
-                  <input type="date" id="check-in" v-model="checkIn" />
-                </div>
-                <div class="date-input">
-                  <label for="check-out">Check out</label>
-                  <input type="date" id="check-out" v-model="checkOut" />
-                </div>
-              </div>
+              <label class="date-label">Select Dates:</label>
+              <v-date-picker 
+                v-model="dateRange" 
+                is-range 
+                :min-date="new Date()" 
+                :masks="{ input: 'YYYY-MM-DD' }" 
+                class="date-picker-full-width"
+                :attributes="calendarAttributes"
+                @dayclick="onDayClick"
+              >
+                <template v-slot="{ inputValue, inputEvents, isDragging }">
+                  <div class="date-picker-input-container">
+                    <input
+                      class="date-picker-input-field"
+                      placeholder="Check-in"
+                      :value="inputValue.start"
+                      v-on="inputEvents.start"
+                    />
+                    <span class="date-separator">→</span>
+                    <input
+                      class="date-picker-input-field"
+                      placeholder="Check-out"
+                      :value="inputValue.end"
+                      v-on="inputEvents.end"
+                      :class="{ 'is-dragging': isDragging }"
+                    />
+                  </div>
+                </template>
+              </v-date-picker>
             </div>
             
-            <button @click="startBooking" class="booking-btn">
+            <button @click="startBooking" class="booking-btn" :disabled="!dateRange.start || !dateRange.end">
               Reserve
             </button>
             
@@ -115,7 +133,7 @@
               You won't be charged yet
             </div>
             
-            <div class="booking-breakdown" v-if="checkIn && checkOut">
+            <div class="booking-breakdown" v-if="dateRange.start && dateRange.end">
               <div class="breakdown-item">
                 <span>€{{ location.price_per_night }} x {{ nights }} nights</span>
                 <span>€{{ totalPrice }}</span>
@@ -215,11 +233,14 @@
 <script>
 import axios from 'axios';
 import MapComponent from '@/components/MapComponent.vue';
+import { DatePicker } from 'v-calendar';
+import 'v-calendar/src/styles/base.css';
 
 export default {
   name: 'LocationDetailsPage',
   components: {
-    MapComponent
+    MapComponent,
+    VDatePicker: DatePicker,
   },
   data() {
     return {
@@ -233,7 +254,9 @@ export default {
         latitude: 0,
         longitude: 0,
         owner_id: null,
-        owner_name: ''
+        owner_name: '',
+        average_rating: 0, // Added to store average_rating from location data
+        total_reviews: 0 // Added to store total_reviews from location data
       },
       images: [],
       currentImage: null,
@@ -242,8 +265,12 @@ export default {
       reviews: [],
       isLoading: true,
       errorMessage: null,
-      checkIn: '',
-      checkOut: '',
+      dateRange: {
+        start: null,
+        end: null,
+      },
+      bookedDates: [], // To store dates that are already booked
+      calendarAttributes: [], // For v-calendar attributes like highlighting booked dates
       isAuthenticated: false,
       userId: null,
       userBookings: [],
@@ -255,21 +282,27 @@ export default {
         bookingId: null
       },
       isSubmittingReview: false,
-      reviewsCount: 0,
-      averageRating: 0
     }
   },
   computed: {
     nights() {
-      if (!this.checkIn || !this.checkOut) return 0;
-      const start = new Date(this.checkIn);
-      const end = new Date(this.checkOut);
+      if (!this.dateRange.start || !this.dateRange.end) return 0;
+      const start = new Date(this.dateRange.start);
+      const end = new Date(this.dateRange.end);
+      if (end <= start) return 0; // Ensure checkout is after checkin
       const diffTime = Math.abs(end - start);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays;
     },
     totalPrice() {
       return (this.nights * parseFloat(this.location.price_per_night)).toFixed(2);
+    },
+    // Computed properties to use location's average_rating and total_reviews
+    averageRating() {
+      return this.location.average_rating ? parseFloat(this.location.average_rating) : 0;
+    },
+    reviewsCount() {
+      return this.location.total_reviews ? parseInt(this.location.total_reviews) : 0;
     }
   },
   created() {
@@ -287,54 +320,78 @@ export default {
     },
     
     async loadLocationDetails() {
+      console.log('[LocationDetailsPage] loadLocationDetails started. Location ID:', this.$route.params.id);
       try {
         this.isLoading = true;
         const locationId = this.$route.params.id;
         
         // Load location details
+        console.log('[LocationDetailsPage] Fetching location details...');
         const locationResponse = await axios.get(`http://localhost:3001/locations/${locationId}`);
+        console.log('[LocationDetailsPage] Location details response:', JSON.parse(JSON.stringify(locationResponse.data)));
         this.location = locationResponse.data;
         
         // Load owner information
         if (this.location.owner_id) {
           try {
+            console.log('[LocationDetailsPage] Fetching owner information for owner_id:', this.location.owner_id);
             const ownerResponse = await axios.get(`http://localhost:3001/users/${this.location.owner_id}`);
+            console.log('[LocationDetailsPage] Owner information response:', JSON.parse(JSON.stringify(ownerResponse.data)));
             this.location.owner_name = ownerResponse.data.name;
           } catch (ownerError) {
-            console.error('Error loading owner information:', ownerError);
+            console.error('[LocationDetailsPage] Error loading owner information:', ownerError);
           }
         }
         
         // Load images
+        console.log('[LocationDetailsPage] Fetching images. Current this.images before fetch:', JSON.parse(JSON.stringify(this.images)));
         const imagesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/images`);
+        console.log('[LocationDetailsPage] Images API Response:', JSON.parse(JSON.stringify(imagesResponse.data)));
         this.images = imagesResponse.data;
-        if (this.images.length > 0) {
-          // Use cover image if available, otherwise first image
-          const coverImage = this.images.find(img => img.is_cover === 1) || this.images[0];
+        console.log('[LocationDetailsPage] After assigning images - this.images:', JSON.parse(JSON.stringify(this.images)));
+        if (this.images && this.images.length > 0) {
+          const coverImage = this.images.find(img => img.is_cover === 1 || img.is_cover === true) || this.images[0];
           this.currentImage = coverImage.image_url;
+          console.log('[LocationDetailsPage] Cover image found. currentImage:', this.currentImage);
+        } else {
+          this.currentImage = null; // Ensure currentImage is reset if no images
+          console.log('[LocationDetailsPage] No images found or images array is empty. currentImage set to null.');
         }
         
         // Load amenities
+        console.log('[LocationDetailsPage] Fetching amenities. Current this.amenities before fetch:', JSON.parse(JSON.stringify(this.amenities)));
         const amenitiesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/amenities`);
+        console.log('[LocationDetailsPage] Amenities API Response:', JSON.parse(JSON.stringify(amenitiesResponse.data)));
         this.amenities = amenitiesResponse.data;
+        console.log('[LocationDetailsPage] After assigning amenities - this.amenities:', JSON.parse(JSON.stringify(this.amenities)));
         
         // Load campsite types
+        console.log('[LocationDetailsPage] Fetching campsite types. Current this.campsiteTypes before fetch:', JSON.parse(JSON.stringify(this.campsiteTypes)));
         const typesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/campsitetype`);
+        console.log('[LocationDetailsPage] Campsite Types API Response:', JSON.parse(JSON.stringify(typesResponse.data)));
         this.campsiteTypes = typesResponse.data;
+        console.log('[LocationDetailsPage] After assigning campsite types - this.campsiteTypes:', JSON.parse(JSON.stringify(this.campsiteTypes)));
         
         // Load reviews
+        console.log('[LocationDetailsPage] Loading reviews...');
         await this.loadReviews();
+
+        // Load booked dates for this location
+        await this.loadBookedDates(locationId);
         
         // Check if user can review
         if (this.isAuthenticated) {
+          console.log('[LocationDetailsPage] Checking if user can review...');
           await this.checkUserCanReview();
         }
+        console.log('[LocationDetailsPage] loadLocationDetails successfully finished.');
         
       } catch (error) {
-        console.error('Error loading location details:', error);
+        console.error('[LocationDetailsPage] Error loading location details:', error);
         this.errorMessage = 'Failed to load location details. Please try again.';
       } finally {
         this.isLoading = false;
+        console.log('[LocationDetailsPage] loadLocationDetails finished (finally block).');
       }
     },
     
@@ -343,50 +400,129 @@ export default {
         const locationId = this.$route.params.id;
         const reviewsResponse = await axios.get(`http://localhost:3001/reviews/${locationId}`);
         
-        // Check if there are reviews
         if (reviewsResponse.data.reviews && reviewsResponse.data.reviews.length > 0) {
           this.reviews = reviewsResponse.data.reviews;
-          this.reviewsCount = this.reviews.length;
+          // this.reviewsCount = this.reviews.length; // No longer needed here
           
-          // Calculate average rating
-          const totalRating = this.reviews.reduce((sum, review) => sum + review.overall_rating, 0);
-          this.averageRating = totalRating / this.reviews.length;
+          // const totalRating = this.reviews.reduce((sum, review) => sum + review.overall_rating, 0); // No longer needed here
+          // this.averageRating = totalRating / this.reviews.length; // No longer needed here
           
-          // Check if user has already reviewed this location
           if (this.isAuthenticated) {
             this.userHasReviewed = this.reviews.some(review => review.user_id === this.userId);
           }
+        } else {
+          this.reviews = []; // Ensure reviews is an empty array if none are found
         }
       } catch (error) {
         console.error('Error loading reviews:', error);
       }
     },
     
+    async loadBookedDates(locationId) {
+      try {
+        const response = await axios.get(`http://localhost:3001/bookings/location/${locationId}/booked-dates`);
+        this.bookedDates = response.data.map(dateRange => ({
+          start: new Date(dateRange.start_date),
+          end: new Date(dateRange.end_date),
+        }));
+        this.prepareCalendarAttributes();
+      } catch (error) {
+        console.error('Error loading booked dates:', error);
+        // Handle error appropriately, maybe set a message
+      }
+    },
+
+    prepareCalendarAttributes() {
+      const attributes = [];
+      // Add highlights for booked dates
+      this.bookedDates.forEach((range, index) => {
+        attributes.push({
+          key: `booked-${index}`,
+          highlight: {
+            color: 'red',
+            fillMode: 'light',
+          },
+          dates: range, // v-calendar can take { start, end } objects directly
+          popover: {
+            label: 'This period is booked.',
+            visibility: 'hover',
+          }
+        });
+      });
+
+      // Disable booked dates for selection
+      // This creates an array of { start, end } objects for disabled dates
+      attributes.push({
+        key: 'disabled-dates',
+        dates: this.bookedDates, // Pass the array of booked date ranges
+        disabled: true, // This is a custom prop, v-calendar uses `disabledDates` or `availableDates`
+                       // For v-calendar v2, you might need to use :disabled-dates="disabledDatesArray"
+                       // or more complex logic with `selectAttribute` or `dragAttribute`
+                       // For now, we'll rely on visual cues and server-side validation.
+                       // A more robust solution would involve generating a list of individual disabled dates
+                       // or using `available-dates` if the API supports it.
+      });
+      this.calendarAttributes = attributes;
+    },
+
+    onDayClick(day) {
+      // Optional: handle day click if needed, for example, to show info
+      console.log('Day clicked:', day.date);
+      // Note: `v-model` with `is-range` handles selection, so this is mostly for additional logic.
+    },
+
     async checkUserCanReview() {
       try {
         const token = localStorage.getItem('token');
-        const locationId = this.$route.params.id;
+        const locationId = parseInt(this.$route.params.id); // Ensure locationId is a number for strict comparison
         
         // Get user's bookings for this location
         const bookingsResponse = await axios.get(`http://localhost:3001/bookings/user/${this.userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
+        // Log all bookings for the user to help debug
+        console.log("User bookings:", bookingsResponse.data);
+
         const completedBookings = bookingsResponse.data.filter(booking => 
-          booking.location_id == locationId && 
-          booking.status_id === 4  // Assuming 4 is the ID for completed bookings
+          booking.location_id === locationId && 
+          booking.status_id === 3  // Corrected: Assuming 3 is the ID for 'completed' bookings from seed.js
         );
         
-        // User can review if they have at least one completed booking for this location
+        console.log("Completed bookings for this location:", completedBookings);
+        console.log("User has already reviewed this location:", this.userHasReviewed);
+
+        // User can review if they have at least one completed booking for this location AND haven't reviewed it yet
         this.userCanReview = completedBookings.length > 0 && !this.userHasReviewed;
+        console.log("User can review status:", this.userCanReview);
         
         if (this.userCanReview) {
-          // Store the booking ID to use when submitting the review
-          this.newReview.bookingId = completedBookings[0].booking_id;
-          this.userBookings = completedBookings;
+          // Find a completed booking that hasn't been reviewed yet.
+          // This logic assumes one review per booking_id as per backend.
+          // If multiple completed bookings exist, it will take the first one.
+          const suitableBooking = completedBookings.find(b => 
+            !this.reviews.some(r => r.booking_id === b.booking_id)
+          );
+
+          if (suitableBooking) {
+            this.newReview.bookingId = suitableBooking.booking_id;
+            console.log("Setting bookingId for review:", this.newReview.bookingId);
+          } else {
+            // This case might occur if all completed bookings for this location already have a review
+            // (though the userHasReviewed flag should ideally catch this for the location overall).
+            this.userCanReview = false; 
+            console.log("No suitable booking found for review (all completed bookings might be reviewed).");
+          }
+          // this.userBookings = completedBookings; // We might not need to store all of them if only one review is allowed per location by a user.
+        } else if (completedBookings.length > 0 && this.userHasReviewed) {
+            console.log("User has completed bookings but has already reviewed this location.");
+        } else if (completedBookings.length === 0) {
+            console.log("User has no completed bookings for this location.");
         }
+
       } catch (error) {
         console.error('Error checking review eligibility:', error);
+        // Potentially set a user-facing message if needed
       }
     },
     
@@ -402,59 +538,61 @@ export default {
         const token = localStorage.getItem('token');
         const locationId = this.$route.params.id;
         
-        const reviewData = {
+        await axios.post('http://localhost:3001/reviews', {
           location_id: locationId,
-          booking_id: this.newReview.bookingId,
+          booking_id: this.newReview.bookingId, 
           overall_rating: this.newReview.rating,
           review_comment: this.newReview.comment
-        };
-        
-        await axios.post('http://localhost:3001/reviews', reviewData, {
+        }, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        // Reset form and reload reviews
+        // Reset form and reload reviews and location details to update average rating
         this.newReview.rating = 0;
         this.newReview.comment = '';
-        this.userHasReviewed = true;
-        this.userCanReview = false;
-        
-        await this.loadReviews();
-        
+        this.newReview.bookingId = null;
+        await this.loadLocationDetails(); // This will reload reviews and update average/count
+        this.userHasReviewed = true; // Mark that user has now reviewed
+        this.userCanReview = false; // User cannot review again immediately
+
       } catch (error) {
         console.error('Error submitting review:', error);
-        alert('Failed to submit review. Please try again.');
+        alert('Failed to submit review. ' + (error.response?.data?.error || 'Please try again.'));
       } finally {
         this.isSubmittingReview = false;
       }
     },
     
+    formatDateToString(date) {
+      if (!date) return '';
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    },
+
     startBooking() {
-      if (!this.checkIn || !this.checkOut) {
-        alert('Please select check-in and check-out dates');
-        return;
-      }
-      
-      // Check if user is logged in
       if (!this.isAuthenticated) {
-        // Store booking details in query params to preserve them after login
-        this.$router.push({
-          path: '/login',
-          query: { 
-            redirect: `/booking/${this.$route.params.id}`,
-            start_date: this.checkIn,
-            end_date: this.checkOut
-          }
-        });
+        this.$router.push({ name: 'LoginPage', query: { redirect: this.$route.fullPath } });
         return;
       }
-      
-      // Navigate to booking page with dates
+      if (!this.dateRange.start || !this.dateRange.end || this.nights <= 0) {
+        this.errorMessage = 'Please select valid check-in and check-out dates.';
+        // Optionally, clear the error message after a few seconds
+        setTimeout(() => { this.errorMessage = null; }, 3000);
+        return;
+      }
+      // Proceed to booking page
       this.$router.push({
-        path: `/booking/${this.$route.params.id}`,
+        name: 'PurchaseBookingPage',
+        params: { locationId: this.location.location_id },
         query: {
-          start_date: this.checkIn,
-          end_date: this.checkOut
+          checkIn: this.formatDateToString(this.dateRange.start),
+          checkOut: this.formatDateToString(this.dateRange.end),
+          nights: this.nights,
+          totalPrice: this.totalPrice,
+          locationName: this.location.name,
+          pricePerNight: this.location.price_per_night
         }
       });
     },
@@ -644,39 +782,14 @@ export default {
 
 .amenity-icon {
   color: #42b983;
-  font-weight: bold;
 }
 
-.map-container {
-  border-radius: 12px;
-  overflow: hidden;
-  height: 300px;
+.map-section .map-container {
+  height: 400px; /* Explicit height for the map container */
   width: 100%;
-}
-
-.no-map {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  background-color: #f8f9fa;
-  color: #666;
-  font-size: 1.1rem;
-}
-
-.location-map {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.booking-card {
-  background-color: white;
   border-radius: 12px;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
-  height: fit-content;
-  position: sticky;
-  top: 20px;
+  overflow: hidden; /* Ensures content fits within rounded borders */
+  position: relative; /* For potential internal absolute positioning if needed by map lib */
 }
 
 .booking-card-content {
@@ -702,33 +815,78 @@ export default {
 }
 
 .date-inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* This class can be removed or restyled as v-date-picker now handles the layout */
+  /* display: grid; */
+  /* grid-template-columns: 1fr 1fr; */
+  /* border: 1px solid #ddd; */
+  /* border-radius: 8px; */
+  /* overflow: hidden; */
+  margin-bottom: 15px; /* Add some spacing if needed */
+}
+
+/* .date-input class removed as it was empty and causing a linting error */
+
+/* .date-input:first-child {
+  border-right: 1px solid #ddd;
+} */
+
+.date-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.date-picker-full-width {
+  width: 100%;
+}
+
+.date-picker-input-container {
+  display: flex;
+  align-items: center;
   border: 1px solid #ddd;
   border-radius: 8px;
-  overflow: hidden;
+  padding: 0px 0px;
+  background-color: #fff;
 }
 
-.date-input {
-  padding: 10px;
-}
-
-.date-input:first-child {
-  border-right: 1px solid #ddd;
-}
-
-.date-input label {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.date-input input {
-  width: 100%;
-  border: none;
-  font-size: 1rem;
+.date-picker-input-field {
+  flex: 1;
+  padding: 10px 12px;
+  border: none; /* Remove individual borders as container has one */
+  font-size: 0.95rem;
   background: transparent;
+  width: 100%; /* Ensure it fills flex item */
+  box-sizing: border-box;
+}
+
+.date-picker-input-field:focus {
+  outline: none;
+}
+
+.date-picker-input-container input:first-child {
+  border-right: 1px solid #ddd; /* Separator line */
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+.date-picker-input-container input:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+
+.date-separator {
+  padding: 0 0px;
+  color: #888;
+  background-color: #fff; /* Match input background */
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.is-dragging {
+  background-color: #f0f0f0;
 }
 
 .booking-btn {
@@ -917,5 +1075,23 @@ export default {
   .amenities-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.map-container {
+  height: 300px; /* Ensure map container has a defined height */
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #eee;
+  margin-top: 15px;
+}
+
+.no-map {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #777;
+  background-color: #f9f9f9;
 }
 </style>

@@ -18,10 +18,13 @@
           <div class="location-preview">
             <img 
               v-if="location.coverImage" 
-              :src="`http://localhost:3001${location.coverImage}`" 
+              :src="location.coverImage" 
               :alt="location.name"
               class="location-image"
             />
+            <div v-else class="location-image-placeholder">
+              <span>No image available</span>
+            </div>
             <div class="location-details">
               <h3>{{ location.name }}</h3>
               <p>{{ location.city }}, {{ location.country }}</p>
@@ -34,28 +37,37 @@
           <form @submit.prevent="handleBooking">
             <div class="form-section">
               <h3 class="section-title">Booking Dates</h3>
-              <div class="date-inputs">
-                <div class="form-group">
-                  <label for="check-in">Check-in</label>
-                  <input 
-                    type="date" 
-                    id="check-in" 
-                    v-model="booking.startDate" 
-                    :min="minDate"
-                    @change="updateEndDate"
-                    required
-                  >
-                </div>
-                <div class="form-group">
-                  <label for="check-out">Check-out</label>
-                  <input 
-                    type="date" 
-                    id="check-out" 
-                    v-model="booking.endDate" 
-                    :min="minEndDate"
-                    required
-                  >
-                </div>
+              <!-- Replace old date inputs with v-date-picker -->
+              <div class="form-group">
+                <label class="date-label">Select Dates:</label>
+                <v-date-picker
+                  v-model="dateRange"
+                  is-range
+                  :min-date="new Date()"
+                  :masks="{ input: 'YYYY-MM-DD' }"
+                  class="date-picker-full-width"
+                  :attributes="calendarAttributes" 
+                  @dayclick="onDayClick"
+                >
+                  <template v-slot="{ inputValue, inputEvents, isDragging }">
+                    <div class="date-picker-input-container">
+                      <input
+                        class="date-picker-input-field"
+                        placeholder="Check-in"
+                        :value="inputValue.start"
+                        v-on="inputEvents.start"
+                      />
+                      <span class="date-separator">→</span>
+                      <input
+                        class="date-picker-input-field"
+                        placeholder="Check-out"
+                        :value="inputValue.end"
+                        v-on="inputEvents.end"
+                        :class="{ 'is-dragging': isDragging }"
+                      />
+                    </div>
+                  </template>
+                </v-date-picker>
               </div>
             </div>
 
@@ -67,7 +79,7 @@
                     type="radio" 
                     id="pay-later" 
                     value="pay-later" 
-                    v-model="booking.paymentMethod"
+                    v-model="paymentMethod"
                     @change="destroyCardElement" 
                     checked
                   >
@@ -78,14 +90,14 @@
                     type="radio" 
                     id="pay-now" 
                     value="pay-now" 
-                    v-model="booking.paymentMethod"
+                    v-model="paymentMethod"
                     @change="initializeStripeAndElements" 
                   >
                   <label for="pay-now">Pay now</label>
                 </div>
               </div>
               
-              <div v-if="booking.paymentMethod === 'pay-now'" class="payment-details">
+              <div v-if="paymentMethod === 'pay-now'" class="payment-details">
                 <!-- Stripe Card Element will be mounted here -->
                 <div id="card-element" class="stripe-card-element"></div>
                 <!-- Used to display form errors from Stripe -->
@@ -101,9 +113,9 @@
               <button 
                 type="submit" 
                 class="submit-btn" 
-                :disabled="isSubmitting || invalidDates || (booking.paymentMethod === 'pay-now' && !isStripeReady)"
+                :disabled="isSubmitting || invalidDates || (paymentMethod === 'pay-now' && !isStripeReady)"
               >
-                {{ isSubmitting ? 'Processing...' : (booking.paymentMethod === 'pay-now' ? 'Confirm and Pay' : 'Confirm Booking') }}
+                {{ isSubmitting ? 'Processing...' : (paymentMethod === 'pay-now' ? 'Confirm and Pay' : 'Confirm Booking') }}
               </button>
             </div>
           </form>
@@ -132,7 +144,8 @@
           
           <div class="booking-policy">
             <h4>Booking Policy</h4>
-            <ul>
+            <p v-if="location.booking_policy">{{ location.booking_policy }}</p>
+            <ul v-else>
               <li>Free cancellation up to 48 hours before check-in</li>
               <li>Check-in time is from 2:00 PM to 8:00 PM</li>
               <li>Check-out time is 10:00 AM</li>
@@ -167,9 +180,14 @@
 <script>
 import axios from 'axios';
 import { loadStripe } from '@stripe/stripe-js';
+import { DatePicker } from 'v-calendar'; // Import v-calendar
+import 'v-calendar/src/styles/base.css';  // Import v-calendar CSS
 
 export default {
   name: 'PurchaseBookingPage',
+  components: { // Register v-calendar component
+    VDatePicker: DatePicker,
+  },
   data() {
     return {
       location: {
@@ -178,13 +196,21 @@ export default {
         country: '',
         price_per_night: 0,
         coverImage: null,
-        campsiteTypes: []
+        campsiteTypes: [],
+        booking_policy: '', // Added
+        service_fee_percentage: 0 // Added (will be fetched)
       },
-      booking: {
-        startDate: '',
-        endDate: '',
-        paymentMethod: 'pay-later' // Default to pay-later
+      // booking: { // Old booking data structure
+      //   startDate: '',
+      //   endDate: '',
+      //   paymentMethod: 'pay-later' 
+      // },
+      dateRange: { // New data structure for v-calendar
+        start: null,
+        end: null,
       },
+      paymentMethod: 'pay-later', // Keep paymentMethod separate
+      calendarAttributes: [], // For v-calendar, if needed for booked dates (optional here)
       isLoading: true,
       isSubmitting: false,
       errorMessage: '',
@@ -199,173 +225,192 @@ export default {
     }
   },
   computed: {
-    minDate() {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Normalize to start of day
-      return today.toISOString().split('T')[0];
-    },
-    minEndDate() {
-      if (!this.booking.startDate) {
-        return this.minDate;
-      }
-      
-      const startDate = new Date(this.booking.startDate);
-      const nextDay = new Date(startDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      return nextDay.toISOString().split('T')[0];
-    },
+    // minDate and minEndDate are less critical with v-calendar's :min-date prop
+    // but can be kept if other logic depends on them.
+    // For simplicity, we'll rely on :min-date="new Date()" in the template.
+    
     nights() {
-      if (!this.booking.startDate || !this.booking.endDate) {
+      if (!this.dateRange.start || !this.dateRange.end) {
         return 0;
       }
-      
-      const start = new Date(this.booking.startDate);
-      const end = new Date(this.booking.endDate);
+      const start = new Date(this.dateRange.start);
+      const end = new Date(this.dateRange.end);
+      if (end <= start) return 0;
       const diffTime = Math.abs(end - start);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays;
     },
+    // ... totalPrice, serviceFee, finalTotal remain largely the same, using this.nights ...
     totalPrice() {
       return this.location.price_per_night * this.nights;
     },
     serviceFee() {
-      // Calculate service fee (10% of total price)
-      return this.totalPrice * 0.10;
+      if (this.location.service_fee_percentage > 0) {
+        return this.totalPrice * (this.location.service_fee_percentage / 100);
+      }
+      return this.totalPrice * 0.10; 
     },
     finalTotal() {
       return this.totalPrice + this.serviceFee;
     },
     invalidDates() {
-      if (!this.booking.startDate || !this.booking.endDate) {
+      if (!this.dateRange.start || !this.dateRange.end) {
         return true;
       }
-      
-      const start = new Date(this.booking.startDate);
-      const end = new Date(this.booking.endDate);
-      const today = new Date(this.minDate); // Use normalized today from minDate
+      const start = new Date(this.dateRange.start);
+      const end = new Date(this.dateRange.end);
+      const today = new Date();
+      today.setHours(0,0,0,0); // Normalize today
 
-      // Check if start date is before today or if start date is after or same as end date
-      return start < today || start >= end;
+      return start < today || start >= end || this.nights <= 0;
     }
   },
   watch: {
-    'booking.paymentMethod'(newValue) {
+    paymentMethod(newValue) { // Changed from 'booking.paymentMethod'
       if (newValue === 'pay-now') {
         this.initializeStripeAndElements();
       } else {
         this.destroyCardElement();
       }
+    },
+    '$route.query': { // Watch for changes in route query parameters
+      immediate: true, // Run the handler immediately on component creation
+      handler(newQuery) {
+        this.initializeBookingDatesFromQuery(newQuery);
+      }
     }
   },
   created() {
-    this.loadLocationData();
-    this.initializeBookingDates();
+    this.loadLocationData(); // This will also call initializeBookingDates
+    // initializeBookingDates is now called within loadLocationData or after its successful completion
   },
   methods: {
-    initializeBookingDates() {
-      // Get dates from query params if available
-      const { start_date, end_date } = this.$route.query;
-      const todayString = this.minDate; // Use normalized today string
+    formatDateForPicker(dateString) { // Helper to convert YYYY-MM-DD to Date object
+        if (!dateString) return null;
+        const parts = dateString.split('-');
+        if (parts.length !== 3) return null; // Basic validation for YYYY-MM-DD
+        const [year, month, day] = parts.map(Number);
+        // Further validation for numeric parts and valid date construction
+        if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+        const date = new Date(year, month - 1, day); // month is 0-indexed
+        // Check if the constructed date is valid (e.g., not Feb 30)
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+        return date;
+    },
+    formatDateForBackend(date) { // Helper to convert Date object to YYYY-MM-DD string
+        if (!date) return null;
+        try {
+            // Ensure 'date' is a Date object before calling toISOString
+            const dateObj = date instanceof Date ? date : new Date(date);
+            return dateObj.toISOString().split('T')[0];
+        } catch (e) {
+            console.error("Error formatting date for backend:", date, e);
+            return null; // Or handle error as appropriate
+        }
+    },
+    initializeBookingDatesFromQuery(query) {
+      const { checkIn, checkOut, nights: queryNights } = query;
+      const today = new Date();
+      today.setHours(0,0,0,0); // Normalize today to start of day
 
-      if (start_date) {
-        // Ensure start_date from query is not in the past
-        this.booking.startDate = start_date < todayString ? todayString : start_date;
-      } else {
-        // Default start date to today if not provided
-        this.booking.startDate = todayString;
+      let startDate = checkIn ? this.formatDateForPicker(checkIn) : null;
+      // If checkIn date is in the past or invalid, default to today
+      if (startDate && startDate < today) startDate = today; 
+      else if (!startDate) startDate = today; // Default to today if not provided or invalid
+      
+      let endDate = checkOut ? this.formatDateForPicker(checkOut) : null;
+
+      // Logic to derive end date if only start date and nights are provided
+      if (startDate && !endDate && queryNights) {
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + (parseInt(queryNights) || 1));
+      } else if (startDate && endDate && endDate <= startDate) {
+         // Ensure end date is after start date
+         endDate = new Date(startDate);
+         endDate.setDate(startDate.getDate() + 1); // Default to one day after start
+      } else if (startDate && !endDate) { // Default end date if not provided from query
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 1); // Default to one day after start
       }
       
-      if (end_date) {
-        // Ensure end_date is valid in relation to the (potentially adjusted) start_date
-        const startDateObj = new Date(this.booking.startDate);
-        const endDateObj = new Date(end_date);
-        if (endDateObj <= startDateObj) {
-          const nextDay = new Date(startDateObj);
-          nextDay.setDate(nextDay.getDate() + 1);
-          this.booking.endDate = nextDay.toISOString().split('T')[0];
-        } else {
-          this.booking.endDate = end_date;
-        }
-      } else {
-        // Set end date to start date + 1 day if only start date is provided or adjusted
-        const startDateObj = new Date(this.booking.startDate);
-        const nextDay = new Date(startDateObj);
-        nextDay.setDate(nextDay.getDate() + 1);
-        this.booking.endDate = nextDay.toISOString().split('T')[0];
-      }
+      this.dateRange = {
+        start: startDate,
+        end: endDate
+      };
+      
+      // Optional: Update location details from query if they were passed and are reliable
+      // const { locationName, pricePerNight } = query;
+      // if (locationName) this.location.name = locationName;
+      // if (pricePerNight) this.location.price_per_night = parseFloat(pricePerNight);
     },
+    // updateEndDate is no longer needed as v-calendar handles range selection.
     
-    updateEndDate() {
-      // If end date is before start date, update it
-      if (this.booking.endDate) {
-        const startDate = new Date(this.booking.startDate);
-        const endDate = new Date(this.booking.endDate);
-        
-        if (startDate >= endDate) {
-          const newEndDate = new Date(startDate);
-          newEndDate.setDate(newEndDate.getDate() + 1);
-          this.booking.endDate = newEndDate.toISOString().split('T')[0];
-        }
-      }
-    },
-    
-    loadLocationData() {
+    async loadLocationData() {
       this.isLoading = true;
       const locationId = this.$route.params.id;
-      
+      // ... (rest of token check and initial error handling) ...
       if (!locationId) {
         this.errorMessage = 'No location selected. Please choose a location to book.';
         this.isLoading = false;
         return;
       }
-      
-      // Check if user is authenticated
       const token = localStorage.getItem('token');
       if (!token) {
-        // Save current route for redirect after login
-        this.$router.push({
-          path: '/login',
-          query: { redirect: this.$route.fullPath }
-        });
+        this.$router.push({ path: '/login', query: { redirect: this.$route.fullPath } });
         return;
       }
-      
-      // Fetch location details
-      axios.get(`http://localhost:3001/locations/${locationId}`)
-        .then(response => {
-          this.location = response.data;
-          return this.loadLocationDetails(locationId);
-        })
-        .catch(error => {
-          console.error('Error loading location data:', error);
-          this.errorMessage = 'Failed to load location data. Please try again.';
-          this.isLoading = false;
-        });
+
+      try {
+        const response = await axios.get(`http://localhost:3001/locations/${locationId}`);
+        this.location = {
+          ...this.location,
+          ...response.data,
+          booking_policy: response.data.booking_policy || '',
+          service_fee_percentage: response.data.service_fee_percentage !== undefined 
+                                    ? parseFloat(response.data.service_fee_percentage) 
+                                    : 10
+        };
+        // Initialize dates *after* location data is loaded, using query params
+        this.initializeBookingDatesFromQuery(this.$route.query); // Ensure dates are set from query
+        await this.loadLocationSubDetails(locationId); // For images, types etc.
+      } catch (error) {
+        console.error('Error loading location data:', error);
+        this.errorMessage = 'Failed to load location data. Please try again.';
+      } finally {
+        this.isLoading = false;
+      }
     },
     
-    async loadLocationDetails(locationId) {
+    async loadLocationSubDetails(locationId) { // Renamed from loadLocationDetails to avoid conflict
       try {
-        // Load location images
         const imagesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/images`);
         if (imagesResponse.data && imagesResponse.data.length > 0) {
-          const coverImage = imagesResponse.data.find(img => img.is_cover === 1) || imagesResponse.data[0];
-          this.location.coverImage = coverImage.image_url;
+          const coverImage = imagesResponse.data.find(img => img.is_cover === 1 || img.is_cover === true) || imagesResponse.data[0];
+          // Construct full URL if path is relative
+          if (coverImage.image_url && !coverImage.image_url.startsWith('http')) {
+            this.location.coverImage = `http://localhost:3001${coverImage.image_url.startsWith('/') ? '' : '/'}${coverImage.image_url}`;
+          } else {
+            this.location.coverImage = coverImage.image_url;
+          }
         }
         
-        // Load campsite types
         const typesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/campsitetype`);
         if (typesResponse.data && typesResponse.data.length > 0) {
           this.location.campsiteTypes = typesResponse.data;
         }
-        
-        this.isLoading = false;
       } catch (error) {
-        console.error('Error loading location details:', error);
-        this.errorMessage = 'Failed to load complete location data. Please try again.';
-        this.isLoading = false;
+        console.error('Error loading location sub-details (images/types):', error);
+        // Non-critical, so don't necessarily set a page-level error message
       }
     },
-    
+    // eslint-disable-next-line no-unused-vars
+    onDayClick(day) {
+      // Optional: handle day click if needed
+      // v-model with is-range handles selection, so this is mostly for additional logic.
+      // console.log('Day clicked on purchase page:', day.date);
+    },
+
+    // ... initializeStripeAndElements, destroyCardElement remain largely the same ...
     async initializeStripeAndElements() {
       if (!this.stripePublishableKey || this.stripePublishableKey === 'YOUR_STRIPE_PUBLISHABLE_KEY') {
         console.error('Stripe publishable key is not set.');
@@ -375,8 +420,11 @@ export default {
       }
 
       if (this.stripe && this.cardElement) {
-        this.isStripeReady = true;
-        return; // Already initialized
+        // Already initialized, ensure it's mounted if the div exists
+        this.isStripeReady = true; // Assume ready if objects exist
+        // Potentially re-mount if element was hidden and re-shown, though usually not needed
+        // if the element itself wasn't destroyed from DOM.
+        return; 
       }
 
       this.isStripeLoading = true;
@@ -390,6 +438,7 @@ export default {
         
         const elements = this.stripe.elements();
         this.cardElement = elements.create('card', {
+          // Add your card Element options here (e.g., style)
           style: {
             base: {
               color: "#32325d",
@@ -407,7 +456,7 @@ export default {
           }
         });
         
-        // Wait for the DOM to update if #card-element is not immediately available
+        // Wait for the next DOM update cycle to ensure #card-element is available
         this.$nextTick(() => {
           const cardElementDiv = document.getElementById('card-element');
           if (cardElementDiv && !cardElementDiv.hasChildNodes()) { // Mount only if not already mounted
@@ -424,13 +473,15 @@ export default {
                 }
              });
           } else if (cardElementDiv && cardElementDiv.hasChildNodes()) {
-            // Already mounted, or div not clean
-            this.isStripeReady = true; // Assume it's ready if children exist
+            // If it has child nodes, assume it's already mounted or being managed.
+            // This can happen if initializeStripeAndElements is called multiple times.
+            this.isStripeReady = true; 
             this.isStripeLoading = false;
           } else {
-            console.error('Stripe card element div not found');
-            this.stripeError = 'Could not initialize payment form.';
+            console.error('Stripe card element div not found or already has content when trying to mount.');
+            this.stripeError = 'Could not initialize payment form. Target element not found or already in use.';
             this.isStripeLoading = false;
+            // this.isStripeReady = false; // Ensure it's false if mount fails
           }
         });
 
@@ -438,27 +489,28 @@ export default {
         console.error('Error initializing Stripe:', error);
         this.stripeError = error.message || 'Failed to initialize payment form.';
         this.isStripeLoading = false;
-        this.isStripeReady = false;
+        this.isStripeReady = false; // Ensure ready state is false on error
       }
     },
 
     destroyCardElement() {
       if (this.cardElement) {
-        this.cardElement.unmount();
-        this.cardElement.destroy();
+        this.cardElement.unmount(); // Unmount from the DOM
+        this.cardElement.destroy(); // Destroy the element instance
         this.cardElement = null;
-        this.isStripeReady = false;
-        this.stripeError = '';
+        this.isStripeReady = false; // Set ready state to false
+        this.stripeError = ''; // Clear any Stripe errors
       }
-      // Also clear Stripe instance if not needed, or keep it if user might switch back
-      // this.stripe = null; 
+      // Note: this.stripe instance is not destroyed here, as it can be reused.
     },
 
     async handleBooking() {
       if (this.invalidDates) {
+        this.errorMessage = "Please select a valid date range.";
+        setTimeout(() => this.errorMessage = '', 3000);
         return;
       }
-      
+      // ... (rest of isSubmitting, token check) ...
       this.isSubmitting = true;
       this.errorMessage = '';
       this.stripeError = '';
@@ -470,7 +522,8 @@ export default {
         return;
       }
 
-      if (this.booking.paymentMethod === 'pay-now') {
+      if (this.paymentMethod === 'pay-now') { // Changed from booking.paymentMethod
+        // ... (Stripe payment logic) ...
         if (!this.stripe || !this.cardElement || !this.isStripeReady) {
           this.stripeError = 'Payment form is not ready. Please wait or try again.';
           this.isSubmitting = false;
@@ -478,16 +531,10 @@ export default {
         }
 
         try {
-          // 1. Create Payment Intent on the backend
           const paymentIntentResponse = await axios.post('http://localhost:3001/api/payments/create-payment-intent', {
-            // IMPORTANT: Backend needs to be updated to accept amount directly
-            // and not rely on booking_id to fetch it.
-            amount: this.finalTotal, // Send amount in base currency unit (e.g., EUR)
-            currency: 'eur', // Or your desired currency
+            amount: this.finalTotal, 
+            currency: 'eur', 
             location_id: parseInt(this.$route.params.id),
-            // You might want to send other booking details for metadata
-            // start_date: this.booking.startDate,
-            // end_date: this.booking.endDate,
           }, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -497,12 +544,10 @@ export default {
             throw new Error('Failed to get payment client secret.');
           }
 
-          // 2. Confirm the card payment with Stripe.js
           const { paymentIntent, error: stripePaymentError } = await this.stripe.confirmCardPayment(
             clientSecret, {
               payment_method: {
                 card: this.cardElement,
-                // billing_details: { name: 'Jenny Rosen' }, // Optional: Add billing details
               }
             }
           );
@@ -514,7 +559,6 @@ export default {
           }
 
           if (paymentIntent && paymentIntent.status === 'succeeded') {
-            // 3. Payment successful, now create the booking in your system
             await this.createBookingInSystem(token, paymentIntent.id);
           } else {
             this.stripeError = 'Payment was not successful. Please try again.';
@@ -526,7 +570,6 @@ export default {
           this.errorMessage = error.response?.data?.error || error.message || 'An error occurred during payment processing.';
           this.isSubmitting = false;
         }
-
       } else { // 'pay-later'
         await this.createBookingInSystem(token);
       }
@@ -534,18 +577,17 @@ export default {
 
     async createBookingInSystem(token, stripePaymentIntentId = null) {
       const locationId = this.$route.params.id;
-      const formatDate = (dateString) => new Date(dateString).toISOString().split('T')[0];
       
       const bookingData = {
         location_id: parseInt(locationId),
-        start_date: formatDate(this.booking.startDate),
-        end_date: formatDate(this.booking.endDate),
+        start_date: this.formatDateForBackend(this.dateRange.start), // Use new dateRange
+        end_date: this.formatDateForBackend(this.dateRange.end),     // Use new dateRange
         total_price: this.finalTotal,
-        // Add stripe_payment_intent_id if payment was made
-        // Backend POST /bookings needs to be updated to save this
+        service_fee: this.serviceFee, // Added service_fee
         ...(stripePaymentIntentId && { stripe_payment_intent_id: stripePaymentIntentId })
       };
       
+      // ... (rest of createBookingInSystem logic) ...
       console.log('Sending booking data to system:', bookingData);
 
       try {
@@ -559,8 +601,7 @@ export default {
 
       } catch (error) {
         console.error('System booking error:', error);
-        this.errorMessage = error.response?.data?.error || 'Failed to save booking after payment. Please contact support.';
-        // If payment was made but booking failed, this is a critical issue to log/handle.
+        this.errorMessage = error.response?.data?.error || 'Failed to save booking. Please contact support.';
         if (stripePaymentIntentId) {
             this.errorMessage += ` (Payment ID: ${stripePaymentIntentId})`;
         }
@@ -570,8 +611,7 @@ export default {
     }
   },
   mounted() {
-    // If pay-now is somehow pre-selected (e.g. due to browser cache), initialize Stripe
-    if (this.booking.paymentMethod === 'pay-now') {
+    if (this.paymentMethod === 'pay-now') { // Changed from booking.paymentMethod
       this.initializeStripeAndElements();
     }
   },
@@ -901,36 +941,107 @@ export default {
 }
 
 .stripe-card-element {
-  padding: 10px;
   border: 1px solid #ddd;
+  padding: 10px;
   border-radius: 4px;
-  background-color: white;
-  margin-bottom: 10px; /* Add some space before the error message */
+  margin-bottom: 10px;
 }
 
 .stripe-error-message {
   color: #fa755a; /* Stripe's error color */
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   margin-top: 5px;
-  min-height: 1.2em; /* Reserve space for error message */
 }
 
 .loading-inline {
   display: flex;
   align-items: center;
-  /* justify-content: center; */ /* If you want it centered */
-  padding: 10px 0;
-  color: #666;
   font-size: 0.9rem;
+  color: #555;
 }
 
 .loader-small {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #42b983;
+  border: 2px solid #f3f3f3; /* Light grey */
+  border-top: 2px solid #3498db; /* Blue */
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   animation: spin 1s linear infinite;
   margin-right: 8px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Styles for v-date-picker (can be shared with LocationDetailsPage) */
+.date-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.date-picker-full-width {
+  width: 100%;
+  margin-bottom: 15px; /* Or adjust as needed */
+}
+
+.date-picker-input-container {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ddd;
+  border-radius: 8px; /* Match other inputs */
+  padding: 0px 0px; /* Remove padding here if input fields have their own */
+  background-color: #fff;
+}
+
+.date-picker-input-field {
+  flex: 1;
+  padding: 10px 12px; /* Match other inputs */
+  border: none; 
+  font-size: 0.95rem; /* Match other inputs */
+  background: transparent;
+  width: 100%; 
+  box-sizing: border-box;
+}
+
+.date-picker-input-field:focus {
+  outline: none;
+}
+
+.date-picker-input-container input:first-child {
+  border-right: 1px solid #ddd; 
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+.date-picker-input-container input:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.date-separator {
+  padding: 0 0px; /* No horizontal padding, rely on input field padding */
+  color: #888;
+  background-color: #fff; 
+  height: 100%;
+  display: flex;
+  align-items: center;
+  /* border-left: 1px solid #ddd; */ /* This was in LocationDetails, check if needed */
+  /* border-right: 1px solid #ddd; */
+}
+
+.is-dragging { /* Style for when dragging to select a range */
+  background-color: #f0f0f0;
+}
+
+/* Adjust .date-inputs if it's still used as a container */
+.date-inputs {
+  /* display: grid; */ /* No longer needed if only one picker */
+  /* grid-template-columns: 1fr 1fr; */
+  /* gap: 15px; */
+  margin-bottom: 10px; /* Add some space below the picker */
 }
 </style>

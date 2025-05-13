@@ -1,184 +1,131 @@
 <template>
-  <div class="profile">
-    <h2>User Profile</h2>
-    
-    <!-- Loading state -->
-    <div v-if="isLoading" class="loading">
-      <div class="loader"></div>
-      <p>Loading profile information...</p>
+  <div class="profile-page">
+    <div v-if="isLoading && !user.id" class="loading-container">
+      <p class="loading-text">Loading profile...</p>
     </div>
-    
-    <!-- Error message -->
-    <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
-    
-    <!-- Success message -->
-    <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
-    
-    <div v-if="!isLoading" class="profile-content">
-      <!-- Sidebar with user info -->
-      <div class="profile-sidebar">
-        <div class="profile-card">
-          <div class="profile-picture">
-            <img 
-              :src="user.profilePictureUrl || 'http://localhost:3001/images/default-profilepicture.jpg'" 
-              alt="Profile picture"
-              class="profile-image"
-            >
-            <button @click="showUploadModal = true" class="edit-picture-btn">
-              <span class="edit-icon">📷</span>
-            </button>
-          </div>
-          
-          <h3>{{ user.name }}</h3>
-          <p class="user-email">{{ user.email }}</p>
-          
-          <div class="profile-stats">
-            <div class="stat">
-              <span class="stat-number">{{ userBookings.length }}</span>
-              <span class="stat-label">Bookings</span>
-            </div>
-          </div>
-          
-          <div class="profile-actions">
-            <button @click="toggleEditMode" class="action-btn edit-btn">
-              <span class="btn-icon">✏️</span> Edit Profile
-            </button>
-            <button @click="showDeleteModal = true" class="action-btn delete-btn">
-              <span class="btn-icon">🗑️</span> Delete Account
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Main content area -->
-      <div class="profile-main">
-        <!-- Edit Profile Form (shown when in edit mode) -->
-        <div v-if="editMode" class="section edit-profile">
-          <h3 class="section-title">Edit Profile</h3>
-          <form @submit.prevent="updateProfile">
-            <div class="form-group">
-              <label for="name">Name</label>
-              <input 
-                type="text" 
-                id="name" 
-                v-model="updatedUser.name" 
-                required
-              >
-            </div>
-            
-            <div class="form-group">
-              <label for="email">Email</label>
-              <input 
-                type="email" 
-                id="email" 
-                v-model="updatedUser.email" 
-                required
-                :disabled="isOAuthUser"
-              >
-              <div v-if="isOAuthUser" class="oauth-note">
-                Email cannot be changed for accounts linked to Google
-              </div>
-            </div>
-            
-            <!-- Only show password fields for non-OAuth users -->
-            <template v-if="!isOAuthUser">
-              <div class="form-group">
-                <label for="current_password">Current Password (required for changes)</label>
-                <input 
-                  type="password" 
-                  id="current_password" 
-                  v-model="updatedUser.current_password" 
-                  required
-                >
-              </div>
-              
-              <div class="form-group">
-                <label for="new_password">New Password (leave blank to keep current)</label>
-                <input 
-                  type="password" 
-                  id="new_password" 
-                  v-model="updatedUser.new_password"
-                >
-              </div>
-            </template>
-            
-            <div v-else class="oauth-note info-box">
-              Password management is handled by Google for your account
-            </div>
-            
-            <div class="form-actions">
-              <button type="submit" class="primary-btn" :disabled="isUpdating">
-                {{ isUpdating ? 'Updating...' : 'Save Changes' }}
-              </button>
-              <button type="button" @click="cancelEdit" class="secondary-btn">Cancel</button>
-            </div>
-          </form>
-        </div>
-      
-        <!-- Bookings section (shown when not in edit mode) -->
-        <div v-else class="section bookings">
-          <h3 class="section-title">My Bookings</h3>
+    <div v-else-if="errorMessage && !user.id" class="error-container">
+      <p class="error-message">{{ errorMessage }}</p>
+      <button @click="loadUserProfile" class="btn btn-primary">Try Again</button>
+    </div>
+    <div v-else-if="user && user.id" class="container">
+      <h1 class="page-title">Welcome, {{ user.name || 'User' }}!</h1>
 
-          <div class="bookings-filter">
-            <button @click="showExpiredBookings = false" :class="{ active: !showExpiredBookings }">Active</button>
-            <button @click="showExpiredBookings = true" :class="{ active: showExpiredBookings }">Expired/Cancelled</button>
-          </div>
-          
-          <div v-if="loadingBookings" class="loading-inline">
-            <div class="loader-small"></div>
-            <span>Loading bookings...</span>
-          </div>
-          
-          <!-- Active Bookings -->
-          <div v-if="!showExpiredBookings">
-            <div v-if="activeBookings.length === 0 && !loadingBookings" class="empty-state">
-              <div class="empty-icon">🏕️</div>
-              <p>You haven't made any active bookings yet.</p>
-              <router-link to="/" class="primary-btn">Find Camping Spots</router-link>
+      <!-- User Information Section -->
+      <section class="profile-section user-info-section">
+        <h2 class="section-header-title">My Information</h2>
+        <div class="user-info-content">
+          <!-- Profile Picture Area -->
+          <div class="profile-picture-area">
+            <div class="profile-picture-container">
+              <div v-if="user.profilePictureUrl" class="profile-picture-wrapper">
+                <img
+                  :src="user.profilePictureUrl"
+                  alt="Profile Picture"
+                  class="profile-picture"
+                  @error="handleProfileImageError"
+                />
+              </div>
+              <div v-else class="profile-picture placeholder-content">
+                <span>No Photo</span>
+              </div>
             </div>
-            <div v-else class="bookings-list">
+            <div class="profile-picture-actions">
+              <input type="file" @change="onFileSelected" accept="image/*" ref="fileInput" style="display: none;">
+              <button @click="$refs.fileInput.click()" class="btn btn-small btn-secondary-outline change-picture-btn">
+                {{ user.profilePictureUrl ? 'Change Picture' : 'Add Picture' }}
+              </button>
+              <!-- Removed upload button -->
+              <button v-if="user.profilePictureUrl" @click="removeProfilePicture" class="btn btn-small btn-danger-outline remove-picture-btn">
+                Remove Picture
+              </button>
+            </div>
+          </div>
+
+          <!-- Profile Details & Actions Area -->
+          <div class="profile-details-area">
+            <div v-if="!editMode" class="profile-details">
+              <div class="detail-group">
+                <p><strong class="font-medium">Name:</strong> {{ user.name || 'N/A' }}</p>
+                <p><strong class="font-medium">Email:</strong> {{ user.email }}</p>
+              </div>
+              <div class="profile-main-actions">
+                <button @click="toggleEditMode" class="btn btn-primary-outline">Edit Profile</button>
+                <button @click="logout" class="btn btn-danger">Logout</button>
+              </div>
+               <div v-if="!isOAuthUser" class="delete-account-action">
+                  <button @click="confirmDeleteAccount" class="btn btn-danger-outline btn-small">Delete Account</button>
+              </div>
+            </div>
+            
+            <!-- Edit Profile Form -->
+            <form v-if="editMode" @submit.prevent="updateProfile" class="edit-profile-form">
+              <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" id="name" v-model="updatedUser.name" required>
+              </div>
+              <div class="form-group" v-if="!isOAuthUser">
+                <label for="currentPassword">Current Password:</label>
+                <input type="password" id="currentPassword" v-model="updatedUser.currentPassword">
+                <small>Required to change password.</small>
+              </div>
+              <div class="form-group" v-if="!isOAuthUser">
+                <label for="newPassword">New Password:</label>
+                <input type="password" id="newPassword" v-model="updatedUser.newPassword" :disabled="isOAuthUser">
+                <small v-if="isOAuthUser">Password cannot be changed for Google accounts.</small>
+              </div>
+              <div class="form-group" v-if="!isOAuthUser">
+                <label for="confirmNewPassword">Confirm New Password:</label>
+                <input type="password" id="confirmNewPassword" v-model="updatedUser.confirmNewPassword" :disabled="isOAuthUser">
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary" :disabled="isUpdatingProfile">
+                  {{ isUpdatingProfile ? 'Saving...' : 'Save Changes' }}
+                </button>
+                <button type="button" @click="cancelEdit" class="btn btn-secondary-outline">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bookings Section -->
+      <section class="profile-section bookings-section">
+        <h2 class="section-header-title">My Bookings</h2>
+        <div v-if="loadingBookings" class="loading-container">
+          <p class="loading-text">Loading bookings...</p>
+        </div>
+        <div v-else-if="errorMessage && userBookings.length === 0" class="error-container">
+          <p class="error-message">{{ errorMessage.includes('bookings') ? errorMessage : 'Could not load bookings.' }}</p>
+        </div>
+        <div v-else>
+          <!-- Active Bookings -->
+          <div v-if="activeBookings.length > 0" class="bookings-list-container">
+            <h3 class="bookings-type-title">Active Bookings</h3>
+            <div class="bookings-grid">
               <div v-for="booking in activeBookings" :key="booking.booking_id" class="booking-card">
                 <div class="booking-image">
-                  <img 
-                    v-if="booking.cover_image_url" 
-                    :src="`http://localhost:3001${booking.cover_image_url}`" 
-                    :alt="booking.location_name || 'Booking'"
+                  <img
+                    v-if="booking.location && booking.location.coverImage"
+                    :src="booking.location.coverImage"
+                    :alt="booking.location_name || 'Location image'"
+                    @error="handleBookingImageError($event, booking)"
                   />
                   <div v-else class="placeholder-image">
-                    <span>No image</span>
+                    <span>No image available</span>
                   </div>
                 </div>
-                <div class="booking-details">
-                  <h4 class="booking-location">{{ booking.location_name || 'Unknown Location' }}</h4>
-                  <div class="booking-info">
-                    <div class="info-row">
-                      <span class="info-label">Dates:</span>
-                      <span class="info-value">{{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">Total:</span>
-                      <span class="info-value price">€{{ formatPrice(booking.total_price) }}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">Status:</span>
-                      <span class="info-value status" :class="getStatusClass(booking.status_name)">
-                        {{ booking.status_name }}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="booking-actions">
-                    <router-link 
-                      :to="`/location/${booking.location_id}`" 
-                      class="view-location-btn"
-                      v-if="booking.location_id"
-                    >
-                      View Location
-                    </router-link>
+                <div class="booking-content">
+                  <h4 class="booking-location-name" :title="booking.location_name">{{ booking.location_name || 'N/A' }}</h4>
+                  <p class="booking-dates">Dates: {{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</p>
+                  <p class="booking-price">Total: ${{ formatPrice(booking.total_price) }}</p>
+                  <p class="booking-status">Status: <span :class="`status-${booking.status_name}`">{{ booking.status_name }}</span></p>
+                  <div class="booking-card-actions">
+                    <button @click="viewBookingDetails(booking.booking_id)" class="btn btn-small btn-primary-outline">View Details</button>
                     <button 
-                      @click="cancelBooking(booking.booking_id)"
-                      class="cancel-booking-btn"
-                      v-if="canBeCancelled(booking)"
+                      v-if="canCancelBooking(booking)" 
+                      @click="promptCancelBooking(booking.booking_id)" 
                       :disabled="isCancelling === booking.booking_id"
+                      class="btn btn-small btn-danger-outline"
                     >
                       {{ isCancelling === booking.booking_id ? 'Cancelling...' : 'Cancel Booking' }}
                     </button>
@@ -187,137 +134,78 @@
               </div>
             </div>
           </div>
+          <div v-else-if="!loadingBookings && userBookings.filter(b => b.status_name !== 'cancelled' && b.status_name !== 'expired').length === 0 && activeBookings.length === 0" class="no-bookings-message">
+            <p>You have no active bookings.</p>
+          </div>
 
-          <!-- Expired/Cancelled Bookings -->
-          <div v-if="showExpiredBookings">
-            <div v-if="expiredBookings.length === 0 && !loadingBookings" class="empty-state">
-              <div class="empty-icon">⏳</div>
-              <p>No expired or long-cancelled bookings found.</p>
-            </div>
-            <div v-else class="bookings-list">
-              <div v-for="booking in expiredBookings" :key="booking.booking_id" class="booking-card expired-card">
-                <div class="booking-image">
-                  <img 
-                    v-if="booking.cover_image_url" 
-                    :src="`http://localhost:3001${booking.cover_image_url}`" 
-                    :alt="booking.location_name || 'Booking'"
+          <!-- Cancelled Bookings -->
+          <div v-if="cancelledBookings.length > 0" class="bookings-list-container cancelled-bookings">
+            <h3 class="bookings-type-title">Cancelled Bookings</h3>
+            <div class="bookings-grid">
+              <div v-for="booking in cancelledBookings" :key="booking.booking_id" class="booking-card cancelled">
+                 <div class="booking-image">
+                   <img
+                    v-if="booking.location && booking.location.coverImage"
+                    :src="booking.location.coverImage"
+                    :alt="booking.location_name || 'Location image'"
+                    @error="handleBookingImageError($event, booking)"
                   />
                   <div v-else class="placeholder-image">
-                    <span>No image</span>
+                    <span>No image available</span>
                   </div>
                 </div>
-                <div class="booking-details">
-                  <h4 class="booking-location">{{ booking.location_name || 'Unknown Location' }}</h4>
-                  <div class="booking-info">
-                    <div class="info-row">
-                      <span class="info-label">Dates:</span>
-                      <span class="info-value">{{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">Total:</span>
-                      <span class="info-value price">€{{ formatPrice(booking.total_price) }}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-label">Status:</span>
-                      <span class="info-value status" :class="getStatusClass(booking.status_name)">
-                        {{ booking.status_name }}
-                      </span>
-                    </div>
-                     <div class="info-row" v-if="booking.status_name === 'cancelled'">
-                      <span class="info-label">Cancelled:</span>
-                      <span class="info-value">{{ formatDateTime(booking.updated_at) }}</span>
-                    </div>
-                  </div>
-                  <!-- No actions for expired bookings usually -->
+                <div class="booking-content">
+                  <h4 class="booking-location-name" :title="booking.location_name">{{ booking.location_name || 'N/A' }}</h4>
+                  <p class="booking-dates">Dates: {{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</p>
+                  <p class="booking-status">Status: <span :class="`status-${booking.status_name}`">{{ booking.status_name }}</span></p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        
-        <!-- Profile navigation (shown when not in edit mode) -->
-        <div v-if="!editMode" class="profile-navigation">
-          <router-link to="/manage-location" class="nav-item">
-            <i class="icon">🏕️</i>
-            <span>Manage Locations</span>
-          </router-link>
-          <div @click="logout" class="nav-item danger">
-            <i class="icon">🚪</i>
-            <span>Log Out</span>
+          
+          <!-- Expired Bookings -->
+          <div v-if="expiredBookings.length > 0" class="bookings-list-container past-bookings">
+            <h3 class="bookings-type-title">Past Bookings</h3>
+            <div class="bookings-grid">
+              <div v-for="booking in expiredBookings" :key="booking.booking_id" class="booking-card expired">
+                <div class="booking-image">
+                   <img
+                    v-if="booking.location && booking.location.coverImage"
+                    :src="booking.location.coverImage"
+                    :alt="booking.location_name || 'Location image'"
+                    @error="handleBookingImageError($event, booking)"
+                  />
+                  <div v-else class="placeholder-image">
+                    <span>No image available</span>
+                  </div>
+                </div>
+                <div class="booking-content">
+                  <h4 class="booking-location-name" :title="booking.location_name">{{ booking.location_name || 'N/A' }}</h4>
+                  <p class="booking-dates">Dates: {{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</p>
+                   <p class="booking-status">Status: <span :class="`status-${booking.status_name}`">{{ booking.status_name }}</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-if="!loadingBookings && userBookings.length === 0 && !errorMessage.includes('bookings')" class="no-bookings-message">
+            <p>You haven't made any bookings yet.</p>
+            <router-link to="/" class="btn btn-primary">Explore Locations</router-link>
           </div>
         </div>
-      </div>
-    </div>
-    
-    <!-- Delete Account Modal -->
-    <div v-if="showDeleteModal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Confirm Account Deletion</h3>
-          <button @click="showDeleteModal = false" class="close-modal">&times;</button>
-        </div>
-        
-        <div class="modal-body">
-          <p class="warning-text">This action cannot be undone. All your data will be permanently removed.</p>
-          
-          <div v-if="deleteError" class="error-message">{{ deleteError }}</div>
-          
-          <form @submit.prevent="deleteAccount">
-            <div class="form-group">
-              <label for="delete_password">Enter your password to confirm</label>
-              <input 
-                type="password" 
-                id="delete_password" 
-                v-model="deletePassword" 
-                required
-                placeholder="Your current password"
-              >
-            </div>
-            
-            <div class="modal-actions">
-              <button type="submit" :disabled="isDeleting" class="delete-confirm-btn">
-                {{ isDeleting ? 'Deleting...' : 'Delete My Account' }}
-              </button>
-              <button type="button" @click="showDeleteModal = false" class="cancel-btn">Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- Upload Profile Picture Modal -->
-    <div v-if="showUploadModal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Upload Profile Picture</h3>
-          <button @click="showUploadModal = false" class="close-modal">&times;</button>
-        </div>
-        
-        <div class="modal-body">
-          <form @submit.prevent="uploadProfilePicture">
-            <div class="form-group">
-              <label for="profile_picture">Select an image</label>
-              <input 
-                type="file" 
-                id="profile_picture" 
-                ref="profilePictureInput"
-                accept="image/*"
-                required
-                class="file-input"
-                @change="handleFileSelect"
-              >
-              <div class="file-input-preview">
-                <img v-if="previewImage" :src="previewImage" alt="Preview" class="preview-image">
-                <div v-else class="preview-placeholder">Image preview will appear here</div>
-              </div>
-            </div>
-            <div class="modal-actions">
-              <button type="submit" :disabled="isUploading || !profilePictureSelected" class="primary-btn">
-                {{ isUploading ? 'Uploading...' : 'Upload' }}
-              </button>
-              <button type="button" @click="showUploadModal = false" class="secondary-btn">Cancel</button>
-            </div>
-          </form>
+      <!-- Modals -->
+      <div v-if="showDeleteConfirmation" class="modal-overlay">
+        <div class="modal-content">
+          <h3>Confirm Account Deletion</h3>
+          <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+          <div class="modal-actions">
+            <button @click="deleteAccount" class="btn btn-danger" :disabled="isDeleting">
+              {{ isDeleting ? 'Deleting...' : 'Yes, Delete My Account' }}
+            </button>
+            <button @click="showDeleteConfirmation = false" class="btn btn-secondary-outline">Cancel</button>
+          </div>
         </div>
       </div>
     </div>
@@ -332,1277 +220,881 @@ export default {
   data() {
     return {
       user: {
-        id: '',
+        id: null,
         name: '',
         email: '',
-        profilePictureUrl: ''
+        profilePictureUrl: null, // Initialize to null
+        created_at: '',
+        auth_type: ''
       },
       updatedUser: {
         name: '',
-        email: '',
-        current_password: '',
-        new_password: ''
+        currentPassword: '',
+        newPassword: '',
+        confirmNewPassword: ''
       },
-      editMode: false,
+      userBookings: [],
       isLoading: true,
-      isUpdating: false,
-      isDeleting: false,
-      isUploading: false,
-      loadingBookings: false,
+      loadingBookings: true,
+      editMode: false,
+      isOAuthUser: false,
       errorMessage: '',
       successMessage: '',
-      showDeleteModal: false,
-      showUploadModal: false,
-      deletePassword: '',
-      deleteError: '',
-      isOAuthUser: false,
-      userBookings: [],
-      showExpiredBookings: false, // New data property
-      isCancelling: null,
-      previewImage: null,
-      profilePictureSelected: false
-    }
-  },
-  created() {
-    this.loadUserProfile();
+      selectedFile: null,
+      isUploading: false,
+      isUpdatingProfile: false,
+      isCancelling: null, // Stores booking_id of booking being cancelled
+      showDeleteConfirmation: false,
+      isDeleting: false,
+    };
   },
   computed: {
     activeBookings() {
+      const now = new Date();
       return this.userBookings.filter(booking => {
-        if (booking.status_name === 'cancelled') {
-          const cancelledAt = new Date(booking.updated_at);
-          const now = new Date();
-          const hoursSinceCancellation = (now - cancelledAt) / (1000 * 60 * 60);
-          // Keep recently cancelled in active list if that's desired
-          return hoursSinceCancellation < 24;
-        }
-        // Only 'confirmed' bookings are active (besides recent cancels)
-        return booking.status_name === 'confirmed';
+        const endDate = new Date(booking.end_date);
+        return booking.status_name === 'confirmed' && endDate >= now;
       });
     },
     expiredBookings() {
+      const now = new Date();
       return this.userBookings.filter(booking => {
-        if (booking.status_name === 'completed') {
-          return true;
-        }
-        if (booking.status_name === 'cancelled') {
-          const cancelledAt = new Date(booking.updated_at);
-          const hoursSinceCancellation = (new Date() - cancelledAt) / (1000 * 60 * 60);
-          return hoursSinceCancellation >= 24; // Older than or equal to 24 hours
-        }
-        return false; // Not 'completed' and not an older 'cancelled' booking
+        const endDate = new Date(booking.end_date);
+        return (booking.status_name !== 'cancelled' && endDate < now) || booking.status_name === 'expired';
       });
+    },
+    cancelledBookings() {
+      return this.userBookings.filter(booking => booking.status_name === 'cancelled');
     }
   },
   methods: {
+    handleProfileImageError() {
+      console.warn(`[ProfilePage] Error loading profile picture. Original src: ${this.user.profilePictureUrl}. Setting to null.`);
+      this.user.profilePictureUrl = null; // Set to null to trigger placeholder
+    },
+    handleBookingImageError(event, booking) {
+      // Log the state of booking.location when the error occurs
+      console.log(`[handleBookingImageError] Called for booking ID ${booking.booking_id} (${booking.location_name}). Initial booking.location:`, booking.location ? JSON.parse(JSON.stringify(booking.location)) : 'booking.location is undefined/null');
+
+      const originalSrc = booking.location && booking.location.coverImage ? booking.location.coverImage : (event.target ? event.target.src : 'unknown');
+      console.warn(`[ProfilePage] Error loading image for booking ${booking.location_name || booking.booking_id}. Original src: ${originalSrc}. Setting to null.`);
+
+      const bookingInArray = this.userBookings.find(b => b.booking_id === booking.booking_id);
+      if (bookingInArray && bookingInArray.location) {
+        this.$set(bookingInArray.location, 'coverImage', null); // Ensure reactivity
+        console.log(`[handleBookingImageError] Set coverImage to null for bookingInArray.location for booking ID ${booking.booking_id}`);
+      } else if (booking.location) {
+        console.warn(`[ProfilePage] Booking with ID ${booking.booking_id} not found in userBookings array for image error, or bookingInArray.location was undefined. Attempting to set coverImage on the passed booking object's location directly.`);
+        this.$set(booking.location, 'coverImage', null); // Ensure reactivity
+        console.log(`[handleBookingImageError] Set coverImage to null for booking.location (fallback) for booking ID ${booking.booking_id}`);
+      } else {
+        console.error(`[ProfilePage] Cannot set coverImage to null for booking ID ${booking.booking_id}: booking or its location object not found.`);
+      }
+    },
     loadUserProfile() {
       this.isLoading = true;
       this.errorMessage = '';
-      
-      // Get stored user data
-      const userData = localStorage.getItem('user');
-      if (!userData) {
-        console.error('No user data found in localStorage');
+      const userDataString = localStorage.getItem('user');
+      if (!userDataString) {
         this.$router.push('/login');
         return;
       }
-      
-      let user;
+      let storedUser;
       try {
-        user = JSON.parse(userData);
-        console.log('User data from localStorage:', user);
-        
-        if (!user || !user.id) {
-          throw new Error('Invalid user data format');
-        }
-        
-        this.user.id = user.id;
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        localStorage.removeItem('user');
-        this.$router.push('/login');
-        return;
-      }
-      
-      // Get token for API request
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No auth token found in localStorage');
-        this.$router.push('/login');
-        return;
-      }
-      
-      console.log('Fetching user profile for ID:', this.user.id);
-      
-      // Fetch user profile
-      axios.get(`http://localhost:3001/users/${this.user.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(response => {
-        console.log('User profile response:', response.data);
-        
-        if (!response.data) {
-          throw new Error('Empty response from server');
-        }
-        
-        this.user.name = response.data.name || 'Unknown';
-        this.user.email = response.data.email || 'No email';
-        this.user.profilePictureUrl = response.data.profile_picture_url ?
-          `http://localhost:3001${response.data.profile_picture_url}` : null;
-        
-        // Update the user data in localStorage to ensure profile_picture_url is present
-        const storedUserData = JSON.parse(localStorage.getItem('user'));
-        if (storedUserData) {
-            storedUserData.name = response.data.name;
-            storedUserData.email = response.data.email;
-            storedUserData.profile_picture_url = response.data.profile_picture_url;
-            localStorage.setItem('user', JSON.stringify(storedUserData));
-        }
-        
-        this.isOAuthUser = response.data.auth_type === 'google';
-        
-        this.updatedUser.name = this.user.name;
-        this.updatedUser.email = this.user.email;
-        
-        this.$root.$emit('auth-changed');
-        
-        // Load user bookings and then set isLoading to false
-        this.loadUserBookings(token)
-          .finally(() => {
-            this.isLoading = false; 
-          });
-      })
-      .catch(error => {
-        console.error('Error fetching user profile:', error);
-        
-        if (error.response) {
-          console.error('Response status:', error.response.status);
-          console.error('Response data:', error.response.data);
-          
-          if (error.response.status === 401) {
-            // Unauthorized - token expired
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            this.$router.push('/login');
-          } else {
-            this.errorMessage = error.response.data?.error || 'Failed to load profile';
-            this.isLoading = false;
+        storedUser = JSON.parse(userDataString);
+        this.user.id = storedUser.user_id || storedUser.id; // Handle both possible id keys
+        this.user.name = storedUser.name;
+        this.user.email = storedUser.email;
+        this.user.created_at = storedUser.created_at;
+        this.user.auth_type = storedUser.auth_type;
+        this.isOAuthUser = storedUser.auth_type === 'google';
+
+        if (storedUser.profile_picture_url) {
+          let fullUrl = storedUser.profile_picture_url;
+          const timestamp = new Date().getTime();
+          // Prepend backend URL if it's a relative path
+          if (fullUrl && !fullUrl.startsWith('http')) {
+             if (fullUrl.startsWith('/uploads/')) {
+                fullUrl = `http://localhost:3001${fullUrl}`;
+             } else {
+                fullUrl = `http://localhost:3001/${fullUrl}`;
+             }
           }
-        } else if (error.request) {
-          // Request was made but no response received
-          console.error('No response received from server');
-          this.errorMessage = 'No response from server. Please check your connection.';
-          this.isLoading = false;
+          this.user.profilePictureUrl = fullUrl ? `${fullUrl}?t=${timestamp}` : null;
+          console.log('[ProfilePage] Set profilePictureUrl to:', this.user.profilePictureUrl);
         } else {
-          // Error setting up the request
-          this.errorMessage = error.message || 'Failed to load profile';
-          this.isLoading = false;
+          this.user.profilePictureUrl = null;
+          console.log('[ProfilePage] No profile_picture_url found in storedUser.');
         }
-        this.isLoading = false; // Ensure isLoading is false on profile fetch error
-      });
+
+        this.updatedUser.name = storedUser.name;
+      } catch (error) {
+        console.error('Error loading user profile from localStorage:', error);
+        this.errorMessage = 'Failed to load profile data. Please try logging out and back in.';
+        // Potentially clear corrupted local storage
+        // localStorage.removeItem('user');
+        // localStorage.removeItem('token');
+        // this.$router.push('/login');
+      } finally {
+        this.isLoading = false;
+      }
+      this.fetchUserBookings(); // Load bookings after profile
     },
-    
-    loadUserBookings(token) {
+
+    async fetchUserBookings() {
       this.loadingBookings = true;
-      // Return the Axios promise
-      return axios.get(`http://localhost:3001/bookings/user/${this.user.id}`, {
+      const token = localStorage.getItem('token'); // Define token here
+      if (!token) {
+        this.errorMessage = 'Authentication token not found. Please log in.';
+        this.loadingBookings = false;
+        return;
+      }
+      axios.get(`http://localhost:3001/bookings/user/${this.user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(response => {
-        console.log('User bookings response:', response.data);
-        this.userBookings = response.data;
-        // this.isLoading = false; // Moved to the caller's .finally()
+        console.log('[ProfilePage] Raw user bookings data received:', JSON.stringify(response.data));
+        this.userBookings = response.data.map(booking => {
+          let finalCoverImageUrl = null; // Default to null
+          
+          const locationData = booking.location;
+          const backendCoverUrl = locationData ? locationData.cover_image_url : null;
+
+          console.log(`[ProfilePage] Processing booking ID ${booking.booking_id}, location: ${booking.location_name}. Has locationData: ${!!locationData}. Backend cover_image_url: ${backendCoverUrl}`);
+
+          if (backendCoverUrl && typeof backendCoverUrl === 'string' && backendCoverUrl.trim() !== '') {
+            const trimmedBackendCoverUrl = backendCoverUrl.trim();
+            if (trimmedBackendCoverUrl.startsWith('http://') || trimmedBackendCoverUrl.startsWith('https://')) {
+              finalCoverImageUrl = trimmedBackendCoverUrl; // It's already absolute
+            } else {
+              // It's relative, construct the full URL
+              const relativePath = trimmedBackendCoverUrl.startsWith('/') ? trimmedBackendCoverUrl : `/${trimmedBackendCoverUrl}`;
+              finalCoverImageUrl = `http://localhost:3001${relativePath}?t=${new Date().getTime()}`; // Add cache buster
+            }
+          } else {
+             console.log(`[ProfilePage] Booking ID ${booking.booking_id} (${booking.location_name}) - cover_image_url is missing or invalid ('${backendCoverUrl}'), using null.`);
+             // finalCoverImageUrl remains null
+          }
+          console.log(`[ProfilePage] Booking ID ${booking.booking_id} (${booking.location_name}) - final coverImage URL set to: ${finalCoverImageUrl}`);
+
+          return {
+            ...booking,
+            location: { // Ensure location object exists even if original was minimal
+              ...(locationData || {}), // Spread original location fields, or empty object if no locationData
+              coverImage: finalCoverImageUrl // Override/set coverImage, will be null if no valid image
+            }
+          };
+        });
       })
       .catch(error => {
         console.error('Error fetching user bookings:', error);
-        this.errorMessage = 'Failed to load bookings. Please try again.';
-        // this.isLoading = false; // Moved to the caller's .finally()
+        this.errorMessage = error.response?.data?.error || 'Failed to load bookings.';
       })
       .finally(() => {
-        this.loadingBookings = false; // This handles the bookings-specific loader
+        this.loadingBookings = false;
       });
     },
-    
     toggleEditMode() {
-      this.editMode = true;
-      this.updatedUser.name = this.user.name;
-      this.updatedUser.email = this.user.email;
-      this.updatedUser.current_password = '';
-      this.updatedUser.new_password = '';
+      this.editMode = !this.editMode;
+      if (this.editMode) {
+        this.updatedUser.name = this.user.name;
+        this.updatedUser.currentPassword = '';
+        this.updatedUser.newPassword = '';
+        this.updatedUser.confirmNewPassword = '';
+      }
     },
-    
     cancelEdit() {
       this.editMode = false;
-      this.errorMessage = '';
     },
-    
     updateProfile() {
-      this.isUpdating = true;
-      this.errorMessage = '';
-      this.successMessage = '';
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        this.$router.push('/login');
+      if (this.updatedUser.newPassword !== this.updatedUser.confirmNewPassword) {
+        this.errorMessage = "New passwords do not match.";
         return;
       }
-      
-      // Only include fields that have changed
-      const updateData = {};
-      if (this.updatedUser.name !== this.user.name) {
-        updateData.name = this.updatedUser.name;
+      if (!this.isOAuthUser && this.updatedUser.newPassword && !this.updatedUser.currentPassword) {
+        this.errorMessage = "Current password is required to set a new password.";
+        return;
       }
+
+      this.isUpdatingProfile = true;
+      this.errorMessage = '';
+      this.successMessage = '';
+      const token = localStorage.getItem('token');
       
-      // Only allow email changes for non-OAuth users
-      if (!this.isOAuthUser && this.updatedUser.email !== this.user.email) {
-        updateData.email = this.updatedUser.email;
+      let payload = { name: this.updatedUser.name };
+      if (!this.isOAuthUser && this.updatedUser.newPassword) {
+        payload.currentPassword = this.updatedUser.currentPassword;
+        payload.newPassword = this.updatedUser.newPassword;
       }
-      
-      // Only include password data for non-OAuth users
-      if (!this.isOAuthUser) {
-        if (this.updatedUser.new_password) {
-          updateData.new_password = this.updatedUser.new_password;
+
+      axios.put(`http://localhost:3001/users/${this.user.id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then(response => {
+        this.user.name = response.data.name || this.user.name;
+        const storedUser = JSON.parse(localStorage.getItem('user'));
+        storedUser.name = this.user.name;
+        localStorage.setItem('user', JSON.stringify(storedUser));
+        this.$root.$emit('auth-changed'); 
+
+        this.successMessage = 'Profile updated successfully.';
+        this.editMode = false;
+        this.updatedUser.currentPassword = '';
+        this.updatedUser.newPassword = '';
+        this.updatedUser.confirmNewPassword = '';
+      })
+      .catch(error => {
+        this.errorMessage = error.response?.data?.error || 'Failed to update profile.';
+      })
+      .finally(() => {
+        this.isUpdatingProfile = false;
+      });
+    },
+    onFileSelected(event) {
+      this.selectedFile = event.target.files[0];
+      if (this.selectedFile) {
+        this.uploadProfilePicture(); // Automatically upload when file is selected
+      }
+    },
+    uploadProfilePicture() {
+      if (!this.selectedFile) return;
+      this.isUploading = true;
+      this.errorMessage = '';
+      this.successMessage = '';
+      const formData = new FormData();
+      formData.append('profile_picture', this.selectedFile); // Changed 'profilePicture' to 'profile_picture'
+      const token = localStorage.getItem('token');
+      axios.post(`http://localhost:3001/users/${this.user.id}/profile-picture`, formData, { // Changed '/upload-picture' to '/profile-picture'
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`
         }
-        // Current password is required for any changes (for non-OAuth users)
-        updateData.current_password = this.updatedUser.current_password;
-      }
-      
-      axios.put(`http://localhost:3001/users/${this.user.id}`, updateData, {
+      })
+      .then(response => {
+        // Backend now sends profile_picture_url
+        const newPicPath = response.data.profile_picture_url; 
+        this.user.profilePictureUrl = newPicPath ? `${newPicPath}?t=${new Date().getTime()}` : null;
+        
+        this.successMessage = 'Profile picture updated.';
+        this.selectedFile = null; 
+        const storedUser = JSON.parse(localStorage.getItem('user'));
+        storedUser.profile_picture_url = newPicPath; 
+        localStorage.setItem('user', JSON.stringify(storedUser));
+        this.$root.$emit('auth-changed'); 
+      })
+      .catch(error => {
+        if (error.response) {
+          console.error('Backend Error Data:', error.response.data);
+          console.error('Backend Error Status:', error.response.status);
+          console.error('Backend Error Headers:', error.response.headers);
+          this.errorMessage = `Upload failed: ${error.response.data?.error || error.response.data?.message || error.response.statusText || 'Server error'}`;
+        } else if (error.request) {
+          console.error('Upload Error: No response received:', error.request);
+          this.errorMessage = 'Upload failed: No response from server. Please check your network connection.';
+        } else {
+          console.error('Upload Error: Request setup issue:', error.message);
+          this.errorMessage = `Upload failed: ${error.message}`;
+        }
+      })
+      .finally(() => {
+        this.isUploading = false;
+      });
+    },
+    removeProfilePicture() {
+      this.isUploading = true; // Reuse for loading state
+      this.errorMessage = '';
+      this.successMessage = '';
+      const token = localStorage.getItem('token');
+
+      // Placeholder for backend call - will need a new endpoint
+      axios.delete(`http://localhost:3001/users/${this.user.id}/profile-picture`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(() => {
-        this.successMessage = 'Profile updated successfully';
-        this.user.name = this.updatedUser.name;
-        this.user.email = this.updatedUser.email;
-        
-        // Update local storage
-        const userData = JSON.parse(localStorage.getItem('user'));
-        userData.name = this.user.name;
-        userData.email = this.user.email;
-        localStorage.setItem('user', JSON.stringify(userData));
-        
-        this.editMode = false;
+        this.user.profilePictureUrl = null;
+        this.successMessage = 'Profile picture removed.';
+        const storedUser = JSON.parse(localStorage.getItem('user'));
+        storedUser.profile_picture_url = null;
+        localStorage.setItem('user', JSON.stringify(storedUser));
+        this.$root.$emit('auth-changed');
+        // Clear selected file in case user selected one then clicked remove
+        this.selectedFile = null; 
+        this.$refs.fileInput.value = null; // Reset file input
       })
       .catch(error => {
-        this.errorMessage = error.response?.data?.error || 'Failed to update profile';
-      })
-      .finally(() => {
-        this.isUpdating = false;
-        this.updatedUser.current_password = '';
-        this.updatedUser.new_password = '';
-      });
-    },
-    
-    deleteAccount() {
-      this.isDeleting = true;
-      this.deleteError = '';
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        this.$router.push('/login');
-        return;
-      }
-      
-      axios.delete('http://localhost:3001/users/delete', {
-        headers: { Authorization: `Bearer ${token}` },
-        data: {
-          user_id: this.user.id,
-          password: this.deletePassword
+        console.error('Error removing profile picture:', error.response || error.message || error);
+        if (error.response) {
+          this.errorMessage = `Removal failed: ${error.response.data?.error || error.response.data?.message || error.response.statusText || 'Server error'}`;
+        } else if (error.request) {
+          this.errorMessage = 'Removal failed: No response from server.';
+        } else {
+          this.errorMessage = `Removal failed: ${error.message}`;
         }
       })
-      .then(() => {
-        // Clear local storage and redirect to login
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        this.$router.push('/login?message=Your account has been deleted');
-      })
-      .catch(error => {
-        this.deleteError = error.response?.data?.error || 'Failed to delete account';
-      })
       .finally(() => {
-        this.isDeleting = false;
+        this.isUploading = false;
       });
     },
-    
     logout() {
-      // Clear authentication data
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
-      // Emit auth-changed event to update UI components
       this.$root.$emit('auth-changed');
-      
-      // Navigate to home page
-      this.$router.push('/');
+      this.$router.push('/login');
     },
+    confirmDeleteAccount() {
+        if (this.isOAuthUser) {
+            this.errorMessage = "Accounts created via Google must be managed through Google.";
+            return;
+        }
+        this.showDeleteConfirmation = true;
+    },
+    deleteAccount() {
+        if (this.isOAuthUser) return; 
 
-    uploadProfilePicture() {
-      this.isUploading = true;
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        this.$router.push('/login');
-        return;
-      }
-      
-      const formData = new FormData();
-      const fileInput = this.$refs.profilePictureInput;
-      
-      if (fileInput.files.length === 0) {
-        this.errorMessage = 'Please select an image file';
-        this.isUploading = false;
-        return;
-      }
-      
-      formData.append('profile_picture', fileInput.files[0]);
-      
-      axios.post(
-        `http://localhost:3001/users/${this.user.id}/profile-picture`, 
-        formData,
-        {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      )
-      .then(response => {
-        // Get the profile picture URL from the response
-        const profilePicturePath = response.data.profile_picture_url;
-        console.log('New profile picture path:', profilePicturePath);
-        
-        // Update profile picture URL in the current page
-        this.user.profilePictureUrl = `http://localhost:3001${profilePicturePath}`;
-        
-        // Update localStorage user data with new profile picture
-        try {
-          const userData = JSON.parse(localStorage.getItem('user'));
-          if (userData) {
-            userData.profile_picture_url = profilePicturePath;
-            localStorage.setItem('user', JSON.stringify(userData));
-            
-            // Give time for localStorage to update
-            setTimeout(() => {
-              // Force refresh of navbar - this is key!
-              this.$root.$emit('auth-changed');
-              
-              // Also force update this component
-              this.$forceUpdate();
-              
-              // Close the modal
-              this.showUploadModal = false;
-              this.previewImage = null;
-              this.profilePictureSelected = false;
-              this.successMessage = 'Profile picture updated successfully';
-            }, 200);
-          }
-        } catch (e) {
-          console.error('Error updating user data in localStorage:', e);
-        }
-      })
-      .catch(error => {
-        this.errorMessage = error.response?.data?.error || 'Failed to upload profile picture';
-      })
-      .finally(() => {
-        this.isUploading = false;
-      });
+        this.isDeleting = true;
+        this.errorMessage = '';
+        const token = localStorage.getItem('token');
+        axios.delete(`http://localhost:3001/users/${this.user.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(() => {
+            this.logout(); 
+        })
+        .catch(error => {
+            this.errorMessage = error.response?.data?.error || 'Failed to delete account.';
+        })
+        .finally(() => {
+            this.isDeleting = false;
+            this.showDeleteConfirmation = false;
+        });
     },
-    
-    handleFileSelect(event) {
-      const fileInput = event.target;
-      if (fileInput.files && fileInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.previewImage = e.target.result;
-        };
-        reader.readAsDataURL(fileInput.files[0]);
-        this.profilePictureSelected = true;
-      }
-    },
-    
     formatDate(dateString) {
+      if (!dateString) return 'N/A';
+      const options = { year: 'numeric', month: 'long', day: 'numeric' }; // Defined options here
       try {
-        if (!dateString) return 'Invalid date';
-        const options = { year: 'numeric', month: 'short', day: 'numeric' };
         return new Date(dateString).toLocaleDateString(undefined, options);
       } catch (error) {
-        console.error('Error formatting date:', error);
-        return 'Invalid date';
+        console.error("Error formatting date:", dateString, error);
+        return 'Invalid Date';
       }
     },
-    
-    formatDateTime(dateTimeString) {
-      if (!dateTimeString) return 'N/A';
-      const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-      return new Date(dateTimeString).toLocaleDateString(undefined, options);
-    },
-
     formatPrice(price) {
-      if (price === null || price === undefined) {
-        return '0.00';
-      }
-      
-      // Handle different formats of price
-      try {
-        // Convert to number if it's a string
-        const numPrice = typeof price === 'string' ? parseFloat(price) : price;
-        // Check if it's a valid number
-        if (isNaN(numPrice)) {
-          return '0.00';
-        }
-        return numPrice.toFixed(2);
-      } catch (error) {
-        console.error('Error formatting price:', error, 'Price value:', price);
-        return '0.00';
-      }
+      if (price === null || price === undefined) return '0.00';
+      const numPrice = parseFloat(String(price));
+      return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2);
     },
-    
-    getStatusText(statusId) {
-      const statuses = {
-        5: 'Pending',
-        6: 'Confirmed',
-        7: 'Cancelled',
-        8: 'Completed'
-      };
-      return statuses[statusId] || 'Unknown';
-    },
-    
-    getStatusClass(statusName) {
-      if (!statusName) return 'status-unknown';
-      return `status-${statusName.toLowerCase().replace(' ', '-')}`;
-    },
-    
-    canBeCancelled(booking) {
-      // Only 'confirmed' bookings can be cancelled
+    canCancelBooking(booking) {
       return booking.status_name === 'confirmed';
     },
-    
-    async cancelBooking(bookingId) {
-      // Find the booking to check its payment type
+    promptCancelBooking(bookingId) {
       const bookingToCancel = this.userBookings.find(b => b.booking_id === bookingId);
-      if (!bookingToCancel) {
-        this.errorMessage = "Could not find booking to cancel.";
-        return;
-      }
+      if (!bookingToCancel) return;
 
       let confirmationMessage = "Are you sure you want to cancel this booking?";
-      // Check if the booking was paid via Stripe (has a stripe_payment_intent_id)
-      // and its status is 'confirmed' (which implies it was paid)
-      if (bookingToCancel.stripe_payment_intent_id && bookingToCancel.status_name === 'confirmed') {
-        confirmationMessage += " A refund will be processed for the paid amount.";
-      } else if (bookingToCancel.status_name === 'confirmed') {
-        // If it's 'confirmed' but no Stripe ID, it might be an older "Pay on Arrival"
-        confirmationMessage += " This was a 'Pay on Arrival' booking, so no refund is applicable through this system.";
+      // Ensure the confirm dialog is actually used
+      if (confirm(confirmationMessage)) {
+        this.executeCancelBooking(bookingId);
       }
-
-
-      if (!confirm(confirmationMessage)) {
-        return;
-      }
-      
+    },
+    async executeCancelBooking(bookingId) {
       this.isCancelling = bookingId;
       this.errorMessage = '';
       this.successMessage = '';
       const token = localStorage.getItem('token');
-      
       try {
-        await axios.patch(`http://localhost:3001/bookings/${bookingId}/cancel`, {}, {
+        await axios.put(`http://localhost:3001/bookings/${bookingId}/cancel`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
-
-        // Update booking status in the local array
-        const booking = this.userBookings.find(b => b.booking_id === bookingId);
-        if (booking) {
-          booking.status_id = 7; // Updated to status_id 7 for 'Cancelled'
-          booking.status_name = 'cancelled'; // Also update the name for immediate UI feedback
-          booking.updated_at = new Date().toISOString(); // Reflect cancellation time
-        }
-        
         this.successMessage = 'Booking cancelled successfully.';
-        // Potentially refresh all bookings to get the latest state from server
-        // await this.loadUserBookings(token); // Uncomment if you prefer to reload all
+        // Refresh bookings to reflect the change
+        this.loadUserBookings(token);
       } catch (error) {
-        this.errorMessage = error.response?.data?.error || 'Failed to cancel booking. Please try again.';
+        this.errorMessage = error.response?.data?.error || 'Failed to cancel booking.';
       } finally {
         this.isCancelling = null;
       }
+    },
+    viewBookingDetails(bookingId) {
+      // Navigate to a booking detail page or show a modal
+      console.log('View details for booking ID:', bookingId);
+      // Example: this.$router.push({ name: 'BookingDetails', params: { bookingId } });
+      // For now, just a log. Implement navigation or modal display as needed.
     }
   },
-  mounted() {
-    // Add event listener for file input
-    this.$nextTick(() => {
-      if (this.$refs.profilePictureInput) {
-        this.$refs.profilePictureInput.addEventListener('change', this.handleFileSelect);
-      }
-    });
+  created() {
+    this.loadUserProfile();
+    // loadUserBookings is called at the end of loadUserProfile
   },
-  beforeDestroy() {
-    // Remove event listener
-    if (this.$refs.profilePictureInput) {
-      this.$refs.profilePictureInput.removeEventListener('change', this.handleFileSelect);
-    }
-  }
-}
+};
 </script>
 
 <style scoped>
-.profile {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+/* General Page Styles */
+.profile-page {
+  max-width: 1000px;
+  margin: 2rem auto;
+  padding: 2rem;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.profile h2 {
-  margin-bottom: 30px;
-  text-align: center;
-  font-size: 2rem;
-  color: #42b983;
-}
-
-/* Loading and messages */
-.loading {
+.container {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 40px;
+  gap: 2rem;
 }
 
-.loader {
-  border: 5px solid #f3f3f3;
-  border-top: 5px solid #42b983;
+.page-title {
+  font-size: 2.2rem;
+  color: #2c3e50; /* Dark Blue-Gray */
+  margin-bottom: 1rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.loading-container, .error-container {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.2rem;
+}
+.loading-text { color: #555; }
+.error-message { color: #e74c3c; /* Red */ }
+
+/* Section Styles */
+.profile-section {
+  background-color: #fff;
+  padding: 1.5rem 2rem;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.section-header-title {
+  font-size: 1.6rem;
+  color: #34495e; /* Wet Asphalt */
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e0e0e0; /* Light Gray Border */
+  font-weight: 500;
+}
+
+/* User Info Section */
+.user-info-section {
+  /* Add styles or remove if empty - Placeholder to avoid errors */
+  margin-bottom: 1rem; /* Example style */
+}
+
+.user-info-content {
+  display: flex;
+  flex-direction: column; /* Stack items vertically */
+  gap: 1.5rem; /* Space between picture area and details area */
+}
+
+.profile-picture-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center picture and buttons */
+  gap: 0.75rem; /* Space between picture and its actions */
+  width: 100%; /* Take full width */
+  margin-bottom: 1rem; /* Add some space below the picture area */
+}
+
+.profile-picture-container {
+  position: relative;
+  width: 150px; /* Or your desired size */
+  height: 150px;
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 15px;
-}
-
-.loading-inline {
+  overflow: hidden;
+  background-color: #e9ecef; /* Placeholder background */
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  color: #666;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
-.loader-small {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #42b983;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-  margin-right: 10px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.error-message, .success-message {
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.error-message {
-  background-color: #ffebee;
-  color: #c62828;
-}
-
-.success-message {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-}
-
-/* Profile layout */
-.profile-content {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 30px;
-}
-
-@media (min-width: 900px) {
-  .profile-content {
-    grid-template-columns: 300px 1fr;
-  }
-}
-
-/* Profile card in sidebar */
-.profile-card {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: 30px;
-  text-align: center;
+.profile-picture-wrapper {
+  width: 100%;
+  height: 100%;
 }
 
 .profile-picture {
-  position: relative;
-  width: 150px;
-  height: 150px;
-  margin: 0 auto 20px;
-}
-
-.profile-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
-  border: 3px solid #f0f0f0;
 }
 
-.edit-picture-btn {
-  position: absolute;
-  bottom: 5px;
-  right: 5px;
-  background-color: white;
-  border: 2px solid #f0f0f0;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
+.placeholder-content {
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  padding: 0;
-  overflow: hidden;
-  transition: all 0.2s ease;
-}
-
-.edit-picture-btn span {
-  font-size: 18px;
-}
-
-.edit-picture-btn span.edit-icon {
-  font-size: 20px;
-}
-
-.edit-picture-btn:hover {
-  background-color: #f9f9f9;
-  transform: scale(1.05);
-}
-
-.profile-card h3 {
-  font-size: 1.5rem;
-  margin-bottom: 5px;
-  color: #2c3e50;
-}
-
-.user-email {
-  color: #666;
-  margin-bottom: 20px;
-  word-break: break-all;
-}
-
-.profile-stats {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-  padding: 10px 0;
-  border-top: 1px solid #f0f0f0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.stat {
   text-align: center;
-  padding: 0 15px;
-}
-
-.stat-number {
-  display: block;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #42b983;
-}
-
-.stat-label {
   font-size: 0.9rem;
-  color: #666;
+  color: #6c757d;
 }
 
-.profile-actions {
+.profile-picture-actions {
+  display: flex;
+  flex-direction: column; /* Stack buttons vertically */
+  align-items: flex-start; /* Align to the start of the flex container */
+  gap: 0.5rem; /* Space between buttons */
+  margin-top: 0.75rem;
+}
+
+.change-picture-btn,
+.upload-btn, /* Keep for potential future use or if styling is shared */
+.remove-picture-btn {
+  width: 100%; /* Make buttons take full width of their container */
+  padding: 0.5rem 0.8rem; /* Adjust padding for better fit */
+  font-size: 0.85rem; /* Slightly smaller font */
+}
+
+/* Ensure buttons in profile-main-actions are not affected if they share general .btn styles */
+.profile-main-actions .btn {
+  width: auto; /* Reset width for these specific buttons */
+}
+
+.profile-details-area {
+  flex-grow: 1; /* Allow this area to take remaining space */
+  width: 100%; /* Take full width */
+}
+
+.profile-details {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 1rem; /* Space between detail groups and actions */
 }
 
-.action-btn {
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
+.detail-group p {
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+  color: #495057;
+}
+.detail-group p strong {
+  color: #343a40;
+}
+
+.profile-main-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
+  gap: 0.75rem; /* Space between main action buttons */
+  margin-top: 1rem;
+  flex-wrap: wrap;
 }
 
-.btn-icon {
-  margin-right: 8px;
-  font-size: 16px;
+.delete-account-action {
+  margin-top: 1.5rem; /* More space before delete button */
+  align-self: flex-start; /* Align to the start if container is flex */
 }
 
-.action-btn:hover {
-  transform: translateY(-2px);
+/* Edit Profile Form */
+.edit-profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem; /* Space between form groups */
+  margin-top: 1rem; /* Space above the form when it appears */
 }
 
-.edit-btn {
-  background-color: #f0f0f0;
-  color: #333;
+.edit-profile-form .form-group {
+  display: flex;
+  flex-direction: column;
 }
 
-.edit-btn:hover {
-  background-color: #e0e0e0;
-}
-
-.delete-btn {
-  background-color: #ffebee;
-  color: #c62828;
-}
-
-.delete-btn:hover {
-  background-color: #ffcdd2;
-}
-
-.logout-btn {
-  background-color: #f5f5f5;
-  color: #333;
-}
-
-.logout-btn:hover {
-  background-color: #e0e0e0;
-}
-
-/* Main content area */
-.profile-main {
-  flex: 1;
-}
-
-.section {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: 25px;
-  margin-bottom: 30px;
-}
-
-.section-title {
-  font-size: 1.3rem;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #f0f0f0;
-  color: #42b983;
-}
-
-/* Form styles */
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
+.edit-profile-form label {
+  margin-bottom: 0.3rem;
   font-weight: 500;
-  margin-bottom: 8px;
-  color: #2c3e50;
+  font-size: 0.95rem;
+  color: #495057;
 }
 
-.form-group input,
-.form-group textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+.edit-profile-form input[type="text"],
+.edit-profile-form input[type="password"] {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
   font-size: 1rem;
-  transition: all 0.2s;
+  width: 100%; /* Make inputs take full width of their container */
+  box-sizing: border-box;
+}
+.edit-profile-form input:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
 }
 
-.form-group input:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #42b983;
-  box-shadow: 0 0 0 2px rgba(66, 185, 131, 0.1);
+.edit-profile-form small {
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin-top: 0.2rem;
 }
 
-.file-input {
-  padding: 10px 0;
-}
-
-.file-input-preview {
-  margin-top: 15px;
-  width: 100%;
-  height: 200px;
-  border: 1px dashed #ddd;
-  border-radius: 6px;
-  overflow: hidden;
-  transition: all 0.2s;
-}
-
-.file-input-preview:hover {
-  border-color: #42b983;
-}
-
-.preview-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.preview-placeholder {
-  width: 100%;
-  height: 100%;
+.edit-profile-form .form-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #999;
-  font-size: 0.9rem;
-  background-color: #f9f9f9;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.oauth-note {
-  margin-top: 8px;
-  font-size: 0.9rem;
-  color: #666;
+/* Bookings Section */
+.bookings-section {
+  /* Add styles or remove if empty - Placeholder to avoid errors */
+  margin-top: 1rem; /* Example style */
 }
 
-.info-box {
-  background-color: #e3f2fd;
-  padding: 15px;
-  border-radius: 6px;
-  color: #0d47a1;
+.bookings-list-container {
+  margin-bottom: 2rem;
+}
+.bookings-list-container:last-child {
+  margin-bottom: 0;
 }
 
-/* Button styles */
-.form-actions {
-  display: flex;
-  gap: 15px;
+.bookings-type-title {
+  font-size: 1.3rem;
+  color: #34495e;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #eee;
 }
 
-.primary-btn, .secondary-btn {
-  flex: 1;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.primary-btn {
-  background-color: #42b983;
-  color: white;
-}
-
-.primary-btn:hover {
-  background-color: #3aa876;
-  transform: translateY(-2px);
-}
-
-.secondary-btn {
-  background-color: #f0f0f0;
-  color: #333;
-}
-
-.secondary-btn:hover {
-  background-color: #e0e0e0;
-  transform: translateY(-2px);
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-/* Empty state styling */
-.empty-state {
-  text-align: center;
-  padding: 30px;
-}
-
-.empty-icon {
-  font-size: 50px;
-  margin-bottom: 15px;
-}
-
-.empty-state p {
-  margin-bottom: 20px;
-  color: #666;
-}
-
-/* Bookings list */
-.bookings-list {
+.bookings-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-
-@media (min-width: 768px) {
-  .bookings-list {
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  }
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
 }
 
 .booking-card {
+  background-color: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.07);
+  overflow: hidden; /* To make border-radius work on image container */
   display: flex;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  transition: all 0.2s;
+  flex-direction: column;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
-
 .booking-card:hover {
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
 .booking-image {
-  width: 120px;
-  flex-shrink: 0;
+  width: 100%;
+  height: 180px; /* Example height, adjust as needed */
+  overflow: hidden; /* Ensures image fits well */
+  background-color: #f0f0f0; /* Fallback bg for the container */
 }
 
-.booking-image img,
-.placeholder-image {
+.booking-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: cover; /* Cover ensures the image fills the space, cropping if necessary */
 }
 
-.placeholder-image {
-  background-color: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #999;
-  font-size: 0.8rem;
-}
-
-.booking-details {
-  flex: 1;
-  padding: 15px;
+.booking-content {
+  padding: 1rem;
+  flex-grow: 1; /* Allows content to fill space if card heights vary */
   display: flex;
   flex-direction: column;
 }
 
-.booking-location {
-  font-size: 1.1rem;
-  margin-bottom: 8px;
-  color: #2c3e50;
-}
-
-.booking-info {
-  flex: 1;
-  margin-bottom: 15px;
-}
-
-.info-row {
-  display: flex;
-  margin-bottom: 5px;
-  font-size: 0.9rem;
-}
-
-.info-label {
-  width: 80px;
-  color: #666;
-  font-weight: 500;
-}
-
-.info-value {
-  flex: 1;
-}
-
-.info-value.price {
+.booking-location-name {
+  font-size: 1.15rem;
   font-weight: 600;
-  color: #42b983;
-}
-
-.info-value.status {
-  padding: 2px 8px;
-  border-radius: 12px;
-  display: inline-block;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.status-pending {
-  background-color: #fff8e1;
-  color: #ff8f00;
-}
-
-.status-confirmed {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-}
-
-.status-cancelled {
-  background-color: #ffebee;
-  color: #c62828;
-}
-
-.status-completed {
-  background-color: #e8eaf6;
-  color: #3f51b5;
-}
-
-.booking-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.view-location-btn,
-.cancel-booking-btn {
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.view-location-btn {
-  background-color: #f5f5f5;
   color: #333;
-  text-decoration: none;
-  flex: 1;
-  border: none;
-}
-
-.view-location-btn:hover {
-  background-color: #e9e9e9;
-  text-decoration: none;
-  transform: translateY(-1px);
-}
-
-.cancel-booking-btn {
-  background-color: #ffebee;
-  color: #c62828;
-  border: none;
-  flex: 1;
-}
-
-.cancel-booking-btn:hover {
-  background-color: #ffcdd2;
-  transform: translateY(-1px);
-}
-
-/* Profile navigation */
-.profile-navigation {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 0.5rem;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.nav-item {
+.booking-dates,
+.booking-price,
+.booking-status {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 0.3rem;
+}
+
+.booking-status .status-confirmed {
+  color: #28a745; /* Green */
+  font-weight: 500;
+}
+.booking-status .status-pending {
+  color: #fd7e14; /* Orange */
+  font-weight: 500;
+}
+.booking-status .status-cancelled {
+  color: #dc3545; /* Red */
+  font-weight: 500;
+}
+.booking-status .status-expired {
+  color: #6c757d; /* Gray */
+  font-weight: 500;
+}
+
+.booking-card-actions {
+  margin-top: auto; /* Pushes actions to the bottom of the card */
+  padding-top: 0.75rem; /* Space above buttons */
   display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.no-bookings-message {
+  text-align: center;
+  padding: 1.5rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  margin-top: 1rem;
+}
+.no-bookings-message p {
+  margin-bottom: 1rem;
+  font-size: 1.05rem;
+}
+
+/* Placeholder Styles */
+.profile-picture.placeholder-content,
+.placeholder-image {
+  display: flex;
+  justify-content: center;
   align-items: center;
-  padding: 15px 20px;
-  border-bottom: 1px solid #f0f0f0;
-  color: #333;
-  transition: all 0.2s;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.nav-item:last-child {
-  border-bottom: none;
-}
-
-.nav-item:hover {
-  background-color: #f9f9f9;
-  text-decoration: none;
-}
-
-.nav-item .icon {
-  margin-right: 15px;
-  font-size: 20px;
-  width: 24px;
+  background-color: #e9ecef; /* Light gray background */
+  color: #6c757d; /* Muted text color */
+  font-size: 0.9rem;
+  border-radius: 4px; /* Match image border-radius if any */
   text-align: center;
 }
 
-.nav-item.danger {
-  color: #c62828;
+.profile-picture.placeholder-content {
+  width: 150px; /* Match profile picture width */
+  height: 150px; /* Match profile picture height */
+  border-radius: 50%; /* If profile pics are circular */
+  /* margin-bottom: 10px; */ /* Handled by gap in profile-picture-container */
 }
 
-.nav-item.danger:hover {
-  background-color: #ffebee;
+.booking-card .placeholder-image {
+  width: 100%;
+  height: 180px; /* Or your standard booking image height */
+  border-top-left-radius: 6px; /* Match card styling */
+  border-top-right-radius: 6px;
 }
 
-/* Modal styling */
-.modal {
+/* Modal Styles */
+.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
   z-index: 1000;
 }
 
 .modal-content {
-  background-color: white;
+  background-color: #fff;
+  padding: 2rem;
   border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
   width: 90%;
-  max-width: 500px;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
-  animation: modal-appear 0.3s ease-out;
+  max-width: 450px;
+  text-align: center;
 }
 
-@keyframes modal-appear {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.modal-header {
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.3rem;
-  color: #2c3e50;
-}
-
-.close-modal {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #999;
-  padding: 0 5px;
-  transition: all 0.2s;
-}
-
-.close-modal:hover {
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
   color: #333;
-  transform: scale(1.1);
 }
 
-.modal-body {
-  padding: 20px;
-}
-
-.warning-text {
-  color: #c62828;
-  margin-bottom: 20px;
-  font-weight: 500;
+.modal-content p {
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+  color: #555;
 }
 
 .modal-actions {
   display: flex;
-  gap: 15px;
-  margin-top: 20px;
+  justify-content: center;
+  gap: 1rem;
 }
 
-.delete-confirm-btn {
-  flex: 1;
-  background-color: #c62828;
-  color: white;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
+/* Button Styles (ensure these are comprehensive or imported) */
+.btn {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  border: 1px solid transparent;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-.delete-confirm-btn:hover {
-  background-color: #b71c1c;
-  transform: translateY(-2px);
-}
-
-.cancel-btn {
-  flex: 1;
-  background-color: #f0f0f0;
-  color: #333;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cancel-btn:hover {
-  background-color: #e0e0e0;
-  transform: translateY(-2px);
-}
-
-@media (max-width: 576px) {
-  .form-actions, .modal-actions {
-    flex-direction: column;
-  }
-}
-
-.bookings-filter {
-  margin-bottom: 20px;
-  display: flex;
-  gap: 10px;
-}
-
-.bookings-filter button {
-  padding: 8px 15px;
-  border: 1px solid #ccc;
-  background-color: #f9f9f9;
-  cursor: pointer;
-  border-radius: 5px;
-  transition: background-color 0.3s, color 0.3s;
-}
-
-.bookings-filter button.active {
+.btn-primary {
   background-color: #007bff;
   color: white;
   border-color: #007bff;
 }
-
-.bookings-filter button:hover:not(.active) {
-  background-color: #e9e9e9;
+.btn-primary:hover {
+  background-color: #0056b3;
+  border-color: #0056b3;
+}
+.btn-primary:disabled {
+  background-color: #007bff;
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
-.booking-card.expired-card {
-  opacity: 0.7;
-  border-left: 5px solid #6c757d; /* Grey border for expired */
+.btn-primary-outline {
+  color: #007bff;
+  border-color: #007bff;
+  background-color: transparent;
+}
+.btn-primary-outline:hover {
+  background-color: #007bff;
+  color: white;
 }
 
-.status-confirmed {
-  color: #28a745; /* Green */
-  font-weight: bold;
+.btn-secondary-outline {
+  color: #6c757d;
+  border-color: #6c757d;
+  background-color: transparent;
+}
+.btn-secondary-outline:hover {
+  background-color: #6c757d;
+  color: white;
 }
 
-.status-cancelled {
-  color: #dc3545; /* Red */
-  font-weight: bold;
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+.btn-danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
 }
 
-.status-completed {
-  color: #17a2b8; /* Teal */
-  font-weight: bold;
+.btn-danger-outline {
+  color: #dc3545;
+  border-color: #dc3545;
+  background-color: transparent;
+}
+.btn-danger-outline:hover {
+  background-color: #dc3545;
+  color: white;
 }
 
-.status-unknown {
-  color: #6c757d; /* Grey */
+.btn-small {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
 }
+
 </style>

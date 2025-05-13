@@ -9,15 +9,35 @@
           <div class="search-form">
             <h2>Find Camping Spots</h2>
             <div class="search-inputs">
-              <input type="text" v-model="searchLocation" placeholder="City or Country">
-              <input type="date" v-model="checkIn" placeholder="Check-in">
-              <input type="date" v-model="checkOut" placeholder="Check-out">
+              <input type="text" v-model="searchLocation" placeholder="City or Country" class="search-input-field">
+              <v-date-picker v-model="dateRange" is-range :min-date="new Date()" :masks="{ input: 'YYYY-MM-DD' }" class="date-picker-wrapper">
+                <template v-slot="{ inputValue, inputEvents, isDragging }">
+                  <div class="date-picker-input-container">
+                    <input
+                      class="search-input-field date-picker-input"
+                      placeholder="Check-in"
+                      :value="inputValue.start"
+                      v-on="inputEvents.start"
+                    />
+                    <span class="date-separator">→</span>
+                    <input
+                      class="search-input-field date-picker-input"
+                      placeholder="Check-out"
+                      :value="inputValue.end"
+                      v-on="inputEvents.end"
+                      :class="{ 'is-dragging': isDragging }"
+                    />
+                  </div>
+                </template>
+              </v-date-picker>
               <button @click="searchLocations" class="search-btn">Search</button>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Map and Filters Section Removed -->
     
     <div class="featured-locations container" v-if="featuredLocations.length > 0">
       <h2>Featured Camping Spots</h2>
@@ -26,7 +46,7 @@
           <div class="location-image">
             <img 
               v-if="location.coverImage" 
-              :src="`http://localhost:3001${location.coverImage}`" 
+              :src="location.coverImage" 
               :alt="location.name"
               class="location-image"
             />
@@ -53,21 +73,48 @@
 
 <script>
 import axios from 'axios';
+import { DatePicker } from 'v-calendar';
+import 'v-calendar/src/styles/base.css';
+// import MapComponent from '@/components/MapComponent.vue'; // Removed
 
 export default {
   name: 'HomePage',
+  components: {
+    VDatePicker: DatePicker,
+    // MapComponent, // Removed
+  },
   data() {
     return {
       isAuthenticated: false,
       searchLocation: '',
-      checkIn: '',
-      checkOut: '',
-      featuredLocations: []
-    }
+      dateRange: {
+        start: null,
+        end: null,
+      },
+      featuredLocations: [],
+      // allLocations: [], // Removed
+      // mapLocations: [], // Removed
+      // filters: { // Removed
+      //   country: '',
+      //   city: '',
+      //   campsiteType: '', 
+      //   amenities: [], 
+      //   minRating: 0,
+      // },
+      // availableCampsiteTypes: [], // Removed
+      // availableAmenities: [], // Removed
+    };
+  },
+  computed: {
+    // filteredMapLocations() { // Removed
+    //   ...
+    // },
   },
   created() {
     this.checkAuth();
     this.loadFeaturedLocations();
+    // this.loadAllLocationsForMap(); // Removed
+    // this.loadFilterData(); // Removed
   },
   methods: {
     checkAuth() {
@@ -75,81 +122,105 @@ export default {
       this.isAuthenticated = !!token;
     },
     loadFeaturedLocations() {
-      axios.get('http://localhost:3001/locations')
+      axios.get('http://localhost:3001/locations?limit=6&featured=true') 
         .then(response => {
-          // Get up to 6 random locations for the homepage
-          this.featuredLocations = response.data
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 6);
-          this.loadLocationImages(this.featuredLocations);
+          this.featuredLocations = response.data;
+          this.loadSubDetailsForLocations(this.featuredLocations); 
         })
         .catch(error => {
           console.error('Error loading featured locations:', error);
         });
     },
-    searchLocations() {
-      // Build query params
-      const queryParams = {};
-      
-      if (this.searchLocation) {
-        // search name, city and country
-        queryParams.query = this.searchLocation;
-      }
-      
-      //if the checkin checkout dates are available, display the results
-      if (this.checkIn && this.checkOut) {
-        queryParams.start_date = this.checkIn;
-        queryParams.end_date = this.checkOut;
-      }
-      
-      // Navigate to search results page with query params
-      this.$router.push({ 
-        path: '/search', 
-        query: queryParams
-      });
-    },
-    getImageUrl(location) {
-      if (location.coverImage) {
-        return `http://localhost:3001${location.coverImage}`;
-      } else {
-        return 'https://via.placeholder.com/300x200?text=No+Image';
-      }
-    },
-    loadLocationImages(locations) {
-      // For each location, fetch its images and campsite types
-      locations.forEach(async (location) => {
+    // loadAllLocationsForMap() { // Removed
+    //   ...
+    // },
+    async loadSubDetailsForLocations(locations) { // Removed updateMapLocationsList parameter
+      for (const location of locations) {
         try {
-          // Get location images
           const imageResponse = await axios.get(
             `http://localhost:3001/locations/${location.location_id}/images`
           );
-          
           if (imageResponse.data && imageResponse.data.length > 0) {
-            // Find cover image (is_cover=1) or use first image
-            const coverImage = imageResponse.data.find(img => img.is_cover === 1) || imageResponse.data[0];
-            // use this special syntax to update array item property
+            const coverImage = imageResponse.data.find(img => img.is_cover === 1 || img.is_cover === true) || imageResponse.data[0];
             this.$set(location, 'coverImage', coverImage.image_url);
           }
-          
-          // Get campsite types
+
           const typesResponse = await axios.get(
             `http://localhost:3001/locations/${location.location_id}/campsitetype`
           );
-          
           if (typesResponse.data && typesResponse.data.length > 0) {
             this.$set(location, 'campsiteTypes', typesResponse.data);
           }
+
+          const amenitiesResponse = await axios.get(
+            `http://localhost:3001/locations/${location.location_id}/amenities`
+          );
+          if (amenitiesResponse.data && amenitiesResponse.data.length > 0) {
+            this.$set(location, 'amenities', amenitiesResponse.data);
+          }
+          
+          try {
+            const reviewsResponse = await axios.get(`http://localhost:3001/locations/${location.location_id}/reviews`);
+            if (reviewsResponse.data && reviewsResponse.data.length > 0) {
+              const totalRating = reviewsResponse.data.reduce((acc, review) => acc + review.rating, 0);
+              this.$set(location, 'average_rating', totalRating / reviewsResponse.data.length);
+              this.$set(location, 'review_count', reviewsResponse.data.length);
+            } else {
+              this.$set(location, 'average_rating', 0);
+              this.$set(location, 'review_count', 0);
+            }
+          } catch (reviewsError) {
+            console.error(`Error loading reviews for ${location.name}:`, reviewsError);
+            this.$set(location, 'average_rating', 0);
+            this.$set(location, 'review_count', 0);
+          }
+
         } catch (error) {
-          console.error(`Error loading data for ${location.name}:`, error);
+          console.error(`Error loading sub-details for ${location.name}:`, error);
         }
-      });
+      }
+      // Removed logic related to updateMapLocationsList
     },
+    // loadFilterData() { // Removed
+    //   ...
+    // },
     getCampsiteTypesList(location) {
       if (!location.campsiteTypes || !location.campsiteTypes.length) {
         return 'No type specified';
       }
       return location.campsiteTypes.map(type => type.name).join(', ');
-    }
+    },
+    // applyMapFilters() { // Removed
+    //   ...
+    // },
+    searchLocations() {
+      const queryParams = {};
+      if (this.searchLocation) {
+        queryParams.query = this.searchLocation;
+      }
+      const formattedCheckIn = this.formatDateToString(this.dateRange.start);
+      const formattedCheckOut = this.formatDateToString(this.dateRange.end);
+
+      if (formattedCheckIn && formattedCheckOut) {
+        queryParams.start_date = formattedCheckIn;
+        queryParams.end_date = formattedCheckOut;
+      }
+      this.$router.push({ 
+        path: '/search', 
+        query: queryParams
+      });
+    },
+    formatDateToString(date) {
+      if (!date) return '';
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      const day = d.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    },
+  },
+  watch: {
+    // Removed filters watcher
   }
 }
 </script>
@@ -207,12 +278,41 @@ export default {
   flex-wrap: wrap;
 }
 
-.search-inputs input {
+.search-inputs input,
+.search-inputs .date-picker-wrapper .search-input-field, /* Target input inside v-date-picker */
+.search-inputs .date-picker-input-container input {
   flex: 1;
-  min-width: 120px;
+  min-width: 120px; /* Ensure consistency */
   padding: 12px 15px;
   border: 1px solid #ddd;
   border-radius: 4px;
+  box-sizing: border-box; /* Add for better layout control */
+}
+
+.search-inputs .date-picker-wrapper {
+  flex: 2; /* Allow wrapper to take more space for two inputs */
+  min-width: 250px; /* Adjust as needed */
+}
+
+.date-picker-input-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.date-picker-input-container input {
+  flex: 1;
+  /* Styles are largely inherited from .search-input-field */
+}
+
+.date-separator {
+  padding: 0 8px;
+  color: #888;
+}
+
+.is-dragging {
+  /* Optional: style for when user is dragging to select end date */
+  background-color: #f0f0f0;
 }
 
 .search-btn {

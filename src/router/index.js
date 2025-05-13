@@ -5,6 +5,7 @@ import LoginPage from '../pages/LoginPage.vue'
 import RegisterPage from '../pages/RegisterPage.vue'
 import ProfilePage from '../pages/ProfilePage.vue'
 import ManageLocationPage from '../pages/ManageLocationPage.vue'
+import LocationAnalytics from '../pages/LocationAnalytics.vue' // Import the new page
 import SearchResultsPage from '../pages/SearchResultsPage.vue'
 import LocationDetailsPage from '../pages/LocationDetailsPage.vue'
 import PurchaseBookingPage from '../pages/PurchaseBookingPage.vue'
@@ -19,6 +20,7 @@ const routes = [
   { path: '/register', name: 'RegisterPage', component: RegisterPage },
   { path: '/profile', name: 'ProfilePage', component: ProfilePage, beforeEnter: authGuard },
   { path: '/manage-location', name: 'ManageLocationPage', component: ManageLocationPage, beforeEnter: authGuard },
+  { path: '/location-analytics/:locationId', name: 'LocationAnalytics', component: LocationAnalytics, beforeEnter: authGuard }, // Add this route
   { path: '/search', name: 'SearchResultsPage', component: SearchResultsPage },
   { path: '/location/:id', name: 'LocationDetailsPage', component: LocationDetailsPage },
   { path: '/booking/:id', name: 'PurchaseBookingPage', component: PurchaseBookingPage, beforeEnter: authGuard },

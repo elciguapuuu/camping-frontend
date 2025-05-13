@@ -62,7 +62,7 @@
       
       <div class="social-login">
         <button @click="registerWithGoogle" class="google-btn">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google logo">
+          <img :src="googleSignInButton" alt="Google sign-in">
           Continue with Google
         </button>
       </div>
@@ -76,6 +76,7 @@
 
 <script>
 import axios from 'axios';
+import googleSignInButton from '@/assets/btn_google_signin_light_normal_web.png'; // Corrected filename
 
 export default {
   name: 'RegisterPage',
@@ -88,7 +89,8 @@ export default {
       emailError: '',
       passwordError: '',
       errorMessage: '',
-      isLoading: false
+      isLoading: false,
+      googleSignInButton
     }
   },
   methods: {
@@ -317,7 +319,7 @@ input.invalid {
 
 .google-btn {
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   background-color: #4285f4; /* Google blue */
   color: white;
   border: none;
@@ -329,6 +331,7 @@ input.invalid {
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
+  gap: 10px; /* Added gap */
 }
 
 .google-btn:hover {
@@ -338,6 +341,9 @@ input.invalid {
 .google-btn img {
   width: 20px;
   height: 20px;
+  background-color: white; /* Optional: if the png has transparency and you want a white bg */
+  padding: 2px; /* Optional: if the image needs some spacing */
+  border-radius: 2px; /* Optional: to match button's border radius */
 }
 
 .auth-footer {

@@ -120,7 +120,11 @@ export default {
               console.log('🖼️ Found profile_picture_url:', this.user.profile_picture_url);
               // Generate URL with timestamp to prevent caching
               const timestamp = new Date().getTime();
-              this.profilePictureUrl = `http://localhost:3001${this.user.profile_picture_url}?t=${timestamp}`;
+              if (this.user.profile_picture_url.startsWith('http')) {
+                this.profilePictureUrl = `${this.user.profile_picture_url}?t=${timestamp}`;
+              } else {
+                this.profilePictureUrl = `http://localhost:3001${this.user.profile_picture_url}?t=${timestamp}`;
+              }
               
               console.log('🔗 Profile picture URL set to:', this.profilePictureUrl);
             } else {
@@ -173,14 +177,21 @@ export default {
         // Update the profile picture URL if it exists
         if (userData.profile_picture_url) {
           // Store the user data in localStorage
-          const storedUser = JSON.parse(localStorage.getItem('user'));
-          storedUser.profile_picture_url = userData.profile_picture_url;
-          localStorage.setItem('user', JSON.stringify(storedUser));
+          const storedUserJSON = localStorage.getItem('user');
+          if (storedUserJSON) {
+            const storedUser = JSON.parse(storedUserJSON);
+            storedUser.profile_picture_url = userData.profile_picture_url;
+            localStorage.setItem('user', JSON.stringify(storedUser));
+          }
           
           // Update component data
           if (this.user) this.user.profile_picture_url = userData.profile_picture_url;
           const timestamp = new Date().getTime();
-          this.profilePictureUrl = `http://localhost:3001${userData.profile_picture_url}?t=${timestamp}`;
+          if (userData.profile_picture_url.startsWith('http')) {
+            this.profilePictureUrl = `${userData.profile_picture_url}?t=${timestamp}`;
+          } else {
+            this.profilePictureUrl = `http://localhost:3001${userData.profile_picture_url}?t=${timestamp}`;
+          }
           
           console.log('🖼️ Updated profile picture URL:', this.profilePictureUrl);
         }

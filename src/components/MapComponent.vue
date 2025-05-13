@@ -9,17 +9,14 @@
 export default {
   name: 'MapComponent',
   props: {
-    latitude: {
-      type: Number,
-      required: true
-    },
-    longitude: {
-      type: Number,
-      required: true
+    locations: { // Changed from latitude/longitude to an array of locations
+      type: Array,
+      required: true,
+      default: () => []
     },
     zoom: {
       type: Number,
-      default: 13
+      default: 6 // Default zoom, will be adjusted by fitBounds or setView for single marker
     },
     mapId: {
       type: String,
@@ -29,42 +26,94 @@ export default {
   data() {
     return {
       map: null,
-      marker: null
+      markerLayerGroup: null // To hold all markers
     };
   },
   mounted() {
     this.initMap();
   },
+  watch: {
+    locations: {
+      handler(newLocations) {
+        this.updateMarkers(newLocations);
+      },
+      deep: true // Watch for changes within the array objects
+    }
+  },
   methods: {
     initMap() {
-      // Use a timeout to ensure the DOM is ready
       setTimeout(() => {
         try {
-          // Initialize map
-          this.map = L.map(this.mapId).setView([this.latitude, this.longitude], this.zoom);
-          
-          // Add the OpenStreetMap tiles
+          if (this.map) { // If map already exists, remove it before re-initializing
+            this.map.remove();
+            this.map = null;
+          }
+          this.map = L.map(this.mapId).setView([46.603354, 1.888334], this.zoom); // Default center (e.g., France)
+
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }).addTo(this.map);
-          
-          // Add a marker at the location
-          this.marker = L.marker([this.latitude, this.longitude]).addTo(this.map);
-          
-          // Force map to refresh its size
+
+          this.markerLayerGroup = L.layerGroup().addTo(this.map);
+          this.updateMarkers(this.locations);
+
           setTimeout(() => {
-            this.map.invalidateSize();
+            if (this.map) this.map.invalidateSize();
           }, 100);
+
         } catch (error) {
           console.error('Error initializing map:', error);
         }
-      }, 200);
+      }, 200); // Delay to ensure DOM is ready
+    },
+    updateMarkers(locationsToDisplay) {
+      if (!this.map || !this.markerLayerGroup) {
+        return;
+      }
+
+      this.markerLayerGroup.clearLayers(); // Clear existing markers
+
+      if (!locationsToDisplay || locationsToDisplay.length === 0) {
+        return;
+      }
+
+      const markers = [];
+      locationsToDisplay.forEach(location => {
+        if (location.latitude != null && location.longitude != null) {
+          const marker = L.marker([location.latitude, location.longitude]);
+          
+          let popupContent = `<strong>${location.name || 'Unnamed Location'}</strong>`;
+          if (location.city) popupContent += `<br>${location.city}`;
+          if (location.country) popupContent += `, ${location.country}`;
+          if (location.location_id) {
+            popupContent += `<br><a href="/location/${location.location_id}" target="_blank">View Details</a>`;
+          }
+          marker.bindPopup(popupContent);
+          markers.push(marker);
+          this.markerLayerGroup.addLayer(marker);
+        }
+      });
+
+      if (markers.length > 0) {
+        if (markers.length === 1) {
+          // For a single marker, set a specific zoom level (e.g., 14)
+          this.map.setView(markers[0].getLatLng(), 14); 
+        } else {
+          // For multiple markers, fit bounds
+          const groupBounds = L.featureGroup(markers).getBounds();
+          this.map.fitBounds(groupBounds.pad(0.1)); // Add some padding
+        }
+      }
+      
+      setTimeout(() => {
+        if (this.map) this.map.invalidateSize();
+      }, 100);
     }
   },
   beforeDestroy() {
-    // Clean up map resources when component is destroyed
     if (this.map) {
       this.map.remove();
+      this.map = null;
     }
   }
 }

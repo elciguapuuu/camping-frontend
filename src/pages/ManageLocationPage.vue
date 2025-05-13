@@ -19,10 +19,10 @@
       
       <form @submit.prevent="handleSubmit" class="location-form">
         <!-- Basic Information Section -->
-        <div class="form-section">
-          <h3 class="section-title">Basic Information</h3>
+        <div class="form-section basic-info-section">
+          <h4 class="section-title">Basic Information</h4>
           
-          <div class="form-group">
+          <div class="form-group full-width">
             <label for="name">Location Name*</label>
             <input 
               type="text" 
@@ -33,23 +33,23 @@
             >
           </div>
           
-          <div class="form-group">
+          <div class="form-group full-width">
             <label for="description">Description*</label>
             <textarea 
               id="description" 
               v-model="location.description" 
               placeholder="Describe your location, its surroundings, and what makes it special"
-              rows="5"
+              rows="3"
               required
             ></textarea>
           </div>
         </div>
         
         <!-- Location Details Section -->
-        <div class="form-section">
-          <h3 class="section-title">Location Details</h3>
+        <div class="form-section location-details-section">
+          <h4 class="section-title">Location Details</h4>
           
-          <div class="form-group">
+          <div class="form-group full-width">
             <label for="address">Full Address*</label>
             <input 
               type="text" 
@@ -95,16 +95,16 @@
             </div>
           </div>
           
-          <div class="form-group">
+          <div class="form-group full-width manual-coordinates-toggle">
             <label>
               <input 
                 type="checkbox" 
                 v-model="showManualCoordinates"
-              > Having trouble finding your location? Enter coordinates manually
+              > Enter coordinates manually (if address lookup fails or for precision)
             </label>
           </div>
           
-          <div v-if="showManualCoordinates" class="form-row">
+          <div v-if="showManualCoordinates" class="form-row manual-coordinates-fields">
             <div class="form-group">
               <label for="latitude">Latitude*</label>
               <input 
@@ -128,31 +128,62 @@
                 required
               >
             </div>
-            
-            <div class="form-group form-info">
-              <p>Tip: You can find coordinates by right-clicking a location on Google Maps and selecting "What's here?"</p>
+          </div>
+          <div v-if="showManualCoordinates" class="form-group full-width form-info">
+             <p>Tip: You can find coordinates by right-clicking a location on Google Maps and selecting "What's here?"</p>
+          </div>
+
+        </div>
+        
+        <!-- Pricing & Policies Section -->
+        <div class="form-section pricing-policy-section">
+          <h4 class="section-title">Pricing & Policies</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="price_per_night">Price per night (€)*</label>
+              <input 
+                type="number" 
+                id="price_per_night" 
+                v-model.number="location.price_per_night" 
+                placeholder="Price in euros"
+                min="1"
+                step="0.01"
+                required
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="service_fee_percentage">Service Fee (%)*</label>
+              <input 
+                type="number" 
+                id="service_fee_percentage" 
+                v-model.number="location.service_fee_percentage" 
+                placeholder="e.g., 10 for 10%"
+                min="0"
+                max="100"
+                step="0.01"
+                required
+              >
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="price_per_night">Price per night (€)*</label>
-            <input 
-              type="number" 
-              id="price_per_night" 
-              v-model="location.price_per_night" 
-              placeholder="Price in euros"
-              min="1"
-              step="0.01"
+          <div class="form-group full-width">
+            <label for="booking_policy">Booking Policy*</label>
+            <textarea 
+              id="booking_policy" 
+              v-model="location.booking_policy" 
+              placeholder="Describe your booking and cancellation policy (e.g., Flexible: Free cancellation up to 48 hours before check-in...)"
+              rows="4"
               required
-            >
+            ></textarea>
           </div>
         </div>
         
         <!-- Campsite Features Section -->
-        <div class="form-section">
-          <h3 class="section-title">Campsite Features</h3>
+        <div class="form-section campsite-features-section">
+          <h4 class="section-title">Campsite Features</h4>
           
-          <div class="form-group">
+          <div class="form-group full-width">
             <label class="required-label">Campsite Types (select all that apply)*</label>
             <div class="options-grid">
               <div v-for="type in campsiteTypes" :key="type.campsitetypes_id" class="option-item">
@@ -167,7 +198,7 @@
             </div>
           </div>
           
-          <div class="form-group">
+          <div class="form-group full-width">
             <label>Amenities (select all that apply)</label>
             <div class="options-grid">
               <div v-for="amenity in amenities" :key="amenity.amenity_id" class="option-item">
@@ -184,42 +215,39 @@
         </div>
         
         <!-- Images Section -->
-        <div class="form-section">
-          <h3 class="section-title">Location Images</h3>
+        <div class="form-section images-section">
+          <h4 class="section-title">Location Images</h4>
           
-          <div class="form-group">
+          <div class="form-group full-width">
             <label class="required-label">Upload Photos (3-10 images)*</label>
             <div class="image-upload-container">
-              <div class="upload-preview">
-                <div v-for="(image, index) in previewImages" :key="index" class="preview-item">
-                  <img :src="image.preview" alt="Preview" class="preview-image">
-                  <button type="button" @click="removeImage(index)" class="remove-image-btn">×</button>
+              <input type="file" ref="fileInput" @change="handleFileChange" multiple accept="image/*" style="display: none;">
+              
+              <div class="image-previews-grid">
+                <div v-for="(image, index) in previewImages" :key="index" class="image-preview-item">
+                  <img :src="image.preview" alt="Image preview" class="preview-img">
+                  <button type="button" @click="removeImage(index)" class="remove-image-btn">&times;</button>
+                  <!-- Optional: You might want to indicate if an image is a cover image, if that logic is further developed -->
+                  <!-- <span v-if="image.is_cover" class="cover-image-tag">Cover</span> -->
                 </div>
-                <div v-if="previewImages.length < 10" class="upload-placeholder" @click="triggerFileInput">
-                  <span>+</span>
-                </div>
-              </div>
-              <div class="upload-instructions">
-                <p>Select 3-10 images of your location. First image will be your main image.</p>
-                <p v-if="previewImages.length < 3" class="error-text">Please upload at least 3 images</p>
-                <input
-                  type="file"
-                  ref="fileInput"
-                  accept="image/*"
-                  multiple
-                  @change="handleFileChange"
-                  class="file-input"
-                >
-                <button type="button" @click="triggerFileInput" class="select-images-btn">
-                  Select Images
+                
+                <button type="button" @click="triggerFileInput" class="add-image-placeholder" v-if="previewImages.length < 10">
+                  <span>+ Add Image</span>
                 </button>
               </div>
+              
+              <p class="image-count-feedback">
+                {{ previewImages.length }} / 10 images selected.
+                <span v-if="previewImages.length > 0 && previewImages.length < 3" class="error-text-small"> (Min 3 required)</span>
+              </p>
+              <div v-if="errorMessage && (errorMessage.includes('image') || errorMessage.includes('photo'))" class="error-message small">{{ errorMessage }}</div>
+
             </div>
           </div>
         </div>
         
         <!-- Submit Section -->
-        <div class="form-actions">
+        <div class="form-actions full-width">
           <button type="submit" :disabled="isSubmitting || previewImages.length < 3" class="submit-btn primary-btn">
             {{ isSubmitting ? 'Saving...' : (isEditing ? 'Update Location' : 'Create Location') }}
           </button>
@@ -242,34 +270,70 @@
       <div v-else class="locations-list">
         <div v-for="location in userLocations" :key="location.location_id" class="location-item card">
           <div class="location-item-header">
-            <div class="location-image" v-if="location.coverImage">
-              <img :src="getImageUrl(location)" :alt="location.name">
-            </div>
-            <div v-else class="location-image location-image-placeholder">
-              <span>No image</span>
+            <div class="location-image">
+              <img v-if="location.coverImage" :src="location.coverImage" :alt="location.name">
+              <div v-else class="location-image-placeholder">
+                <span>No image</span>
+              </div>
             </div>
             <div class="location-summary">
               <h4>{{ location.name }}</h4>
               <p class="location-area">{{ location.city }}, {{ location.country }}</p>
-              <p class="location-price">€{{ location.price_per_night }} per night</p>
-              <p class="campsite-type" v-if="location.campsite_type_name">
-                {{ location.campsite_type_name }}
-              </p>
+              <p class="location-price"><strong>Price:</strong> €{{ location.price_per_night ? location.price_per_night.toFixed(2) : 'N/A' }} / night</p>
+              <p class="location-fee"><strong>Service Fee:</strong> {{ location.service_fee_percentage !== undefined ? location.service_fee_percentage.toFixed(2) : 'N/A' }}%</p>
+              <p class="location-policy"><strong>Policy:</strong> {{ location.booking_policy ? (location.booking_policy.substring(0, 50) + '...') : 'Not set' }}</p>
+              <div class="location-rating-summary" v-if="location.total_reviews > 0">
+                <span class="stars">★ {{ parseFloat(location.average_rating).toFixed(1) }}</span>
+                <span class="reviews-count">({{ location.total_reviews }} reviews)</span>
+              </div>
+              <p v-else class="no-reviews-summary">No reviews yet</p>
             </div>
           </div>
+
+          <div class="location-stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">Earnings (Last Week):</span>
+              <span class="stat-value">€{{ location.earnings_last_week ? location.earnings_last_week.toFixed(2) : '0.00' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Earnings (Last Month):</span>
+              <span class="stat-value">€{{ location.earnings_last_month ? location.earnings_last_month.toFixed(2) : '0.00' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Earnings (Last Year):</span>
+              <span class="stat-value">€{{ location.earnings_last_year ? location.earnings_last_year.toFixed(2) : '0.00' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Total Bookings:</span>
+              <span class="stat-value">{{ location.total_bookings }}</span>
+            </div>
+          </div>
+
+          <!-- Weekly Earnings Chart -->
+          <div class="earnings-chart-container" v-if="location.weeklyEarningsData && location.weeklyEarningsData.labels && location.weeklyEarningsData.labels.length > 0">
+            <h4>Weekly Earnings Trend</h4>
+            <weekly-earnings-chart :chartDataProp="location.weeklyEarningsData" />
+          </div>
+          <div v-else-if="location.loadingWeeklyEarnings">
+            <p>Loading weekly earnings chart...</p>
+          </div>
+          <div v-else>
+            <p>No weekly earnings data available to display chart.</p>
+          </div>
           
-          <div class="location-stats">
-            <p>Active Bookings: {{ location.activeBookingsCount }}</p>
-            <p>Past/Cancelled Bookings: {{ location.pastBookingsCount }}</p>
+          <div class="location-current-bookings-summary">
+            <p>Active Bookings: {{ activeBookingsFor(location).length }}</p>
+            <p>Past/Cancelled Bookings: {{ pastBookingsFor(location).length }}</p>
             <div v-if="location.loadingLocationBookings">Loading booking details...</div>
           </div>
 
           <div class="location-actions">
-            <button @click="editLocation(location)" class="action-btn edit-btn">Edit</button>
-            <button @click="deleteLocation(location.location_id)" class="action-btn delete-btn">Delete</button>
+            <button @click="editLocation(location)" class="action-btn edit-btn btn-primary">Edit</button>
+            <button @click="deleteLocation(location.location_id)" class="action-btn delete-btn btn-danger">Delete</button>
             <button @click="toggleBookingsDisplay(location)" class="action-btn view-bookings-btn">
               {{ location.showBookingsSection ? 'Hide' : 'View' }} Bookings
             </button>
+            <button @click="goToLocationAnalytics(location.location_id)" class="action-btn analytics-btn">View Analytics</button> <!-- New Button -->
           </div>
 
           <div v-if="location.showBookingsSection" class="location-bookings-details">
@@ -312,9 +376,13 @@
 
 <script>
 import axios from 'axios';
+import WeeklyEarningsChart from '@/components/WeeklyEarningsChart.vue'; // Import the chart component
 
 export default {
   name: 'ManageLocationPage',
+  components: { // Register the chart component
+    WeeklyEarningsChart
+  },
   data() {
     return {
       location: {
@@ -324,27 +392,30 @@ export default {
         city: '',
         country: '',
         price_per_night: null,
-        amenities: [],
-        campsite_type_id: null, // Keep for backward compatibility
-        campsite_types: [],     // Add this new array for multiple types
+        booking_policy: '', // Added
+        service_fee_percentage: 10.00, // Added, default to 10%
+        amenities: [], // Will store array of IDs
+        campsite_types: [], // Will store array of IDs
         latitude: null,
-        longitude: null
+        longitude: null,
+        location_id: null, // Ensure this is part of the location model for editing
+        weeklyEarningsData: { labels: [], datasets: [] }, // Add for chart
+        loadingWeeklyEarnings: false // Add for chart loading state
       },
-      showLocationForm: false, // New: controls visibility of the add/edit form
-      isLoadingLocations: true, // New: for loading state of locations list
-      // Each location in userLocations will be augmented with:
-      // bookings: [], showBookingsSection: false, activeBookingsCount: 0, pastBookingsCount: 0, loadingLocationBookings: false, activeTab: 'active'
+      showLocationForm: false,
+      isLoadingLocations: true,
       showManualCoordinates: false,
-      amenities: [],
-      campsiteTypes: [],
+      amenities: [], // List of all available amenities
+      campsiteTypes: [], // List of all available campsite types
       isSubmitting: false,
       errorMessage: '',
       successMessage: '',
       userLocations: [],
       isEditing: false,
       infoMessage: '',
-      previewImages: [],
-      imagesToUpload: []
+      previewImages: [], // For displaying image previews in the form
+      imagesToUpload: [], // For new image files to be uploaded
+      imagesToDelete: [] // For public_ids of existing images to be deleted
     }
   },
   computed: { // New computed properties for filtering bookings per location
@@ -373,15 +444,18 @@ export default {
         return new Date(dateString).toLocaleDateString(undefined, options);
     },
     openAddLocationForm() {
-      this.resetForm(); // Clear form fields
+      this.resetForm();
       this.isEditing = false;
+      this.location.location_id = null; // Explicitly nullify ID for new location
+      this.location.booking_policy = ''; // Reset booking policy
+      this.location.service_fee_percentage = 10.00; // Reset service fee to default
       this.showLocationForm = true;
-      this.successMessage = ''; // Clear messages when opening form
+      this.successMessage = '';
       this.errorMessage = '';
     },
     closeLocationForm() {
       this.showLocationForm = false;
-      this.resetForm(); // Also clear form fields on cancel
+      this.resetForm();
     },
     setActiveTab(location, tabName) {
       this.$set(location, 'activeTab', tabName);
@@ -415,33 +489,47 @@ export default {
       
       const userData = JSON.parse(localStorage.getItem('user'));
       
-      axios.get(`http://localhost:3001/locations/user/${userData.id}`, {
+      // Use the updated backend route that includes all necessary stats
+      axios.get(`http://localhost:3001/locations/owner/${userData.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(response => {
         const locations = response.data.map(loc => {
+          // Backend now provides properly formatted numbers, but we can ensure defaults here
           return {
             ...loc,
-            coverImage: null,
-            allImages: [],
-            // campsite_type_id: null, // Keep if used elsewhere, or remove if fully replaced
-            campsite_type_name: 'Loading...', // Keep or update based on new logic
-            bookings: [],
+            price_per_night: loc.price_per_night !== undefined ? parseFloat(loc.price_per_night) : 0,
+            booking_policy: loc.booking_policy || '', // Added
+            service_fee_percentage: loc.service_fee_percentage !== undefined ? parseFloat(loc.service_fee_percentage) : 10.00, // Added
+            average_rating: loc.average_rating !== undefined ? parseFloat(loc.average_rating) : 0,
+            total_reviews: loc.total_reviews !== undefined ? parseInt(loc.total_reviews) : 0,
+            total_bookings: loc.total_bookings !== undefined ? parseInt(loc.total_bookings) : 0,
+            earnings_last_week: loc.earnings_last_week !== undefined ? parseFloat(loc.earnings_last_week) : 0,
+            earnings_last_month: loc.earnings_last_month !== undefined ? parseFloat(loc.earnings_last_month) : 0,
+            earnings_last_year: loc.earnings_last_year !== undefined ? parseFloat(loc.earnings_last_year) : 0,
+            coverImage: null, // Will be loaded by loadIndividualLocationDetails
+            allImages: [],    // Will be loaded by loadIndividualLocationDetails
+            campsite_type_name: 'Loading...', // Will be loaded by loadIndividualLocationDetails
+            selected_amenity_ids: [], // Initialize for storing fetched IDs
+            selected_campsitetype_ids: [], // Initialize for storing fetched IDs
+            bookings: [], // Corrected: removed extra comma
             showBookingsSection: false,
-            activeBookingsCount: 0,
-            pastBookingsCount: 0,
+            // activeBookingsCount and pastBookingsCount will be derived from bookings array later
             loadingLocationBookings: false,
-            activeTab: 'active' // Default tab for bookings view
+            activeTab: 'active',
+            weeklyEarningsData: { labels: [], datasets: [] }, // Initialize for chart
+            loadingWeeklyEarnings: false // Initialize for chart loading state
           };
         });
         
         this.userLocations = locations;
         this.isLoadingLocations = false;
         
-        // Load additional details (campsite type, images, and now bookings)
+        // Load additional details (campsite type, images, and bookings)
         this.userLocations.forEach(detailedLoc => {
-          this.loadIndividualLocationDetails(detailedLoc, token); // Modified to take one location
-          this.fetchBookingsForLocation(detailedLoc, token); // New call
+          this.loadIndividualLocationDetails(detailedLoc, token); 
+          this.fetchBookingsForLocation(detailedLoc, token); 
+          this.fetchWeeklyEarnings(detailedLoc, token); // Fetch earnings data
         });
       })
       .catch(error => {
@@ -460,13 +548,16 @@ export default {
             // Assuming a location might have multiple types, join their names or pick the first.
             // For simplicity, let's assume the first one or join, adjust as needed.
             this.$set(location, 'campsite_type_name', response.data.map(ct => ct.name).join(', ') || 'Not specified');
+            this.$set(location, 'selected_campsitetype_ids', response.data.map(ct => ct.campsitetypes_id)); // Store IDs
           } else {
             this.$set(location, 'campsite_type_name', 'Not specified');
+            this.$set(location, 'selected_campsitetype_ids', []);
           }
         })
         .catch(error => {
           console.error(`Error loading campsite type for location ${location.location_id}:`, error);
           this.$set(location, 'campsite_type_name', 'Error loading type');
+          this.$set(location, 'selected_campsitetype_ids', []);
         });
         
       // Load images for this specific location
@@ -475,11 +566,30 @@ export default {
           if (response.data && response.data.length > 0) {
             const coverImage = response.data.find(img => img.is_cover === 1) || response.data[0];
             this.$set(location, 'coverImage', coverImage.image_url);
-            this.$set(location, 'allImages', response.data);
+            this.$set(location, 'allImages', response.data); // Used in editLocation
+          } else {
+            this.$set(location, 'allImages', []);
           }
         })
         .catch(error => {
           console.error(`Error loading images for location ${location.location_id}:`, error);
+          this.$set(location, 'allImages', []);
+        });
+
+      // NEW: Load selected amenities for this specific location
+      // **ACTION REQUIRED**: Implement this backend endpoint: GET /locations/:location_id/amenities-for-location
+      // It should return an array of amenity objects (e.g., [{ amenity_id: 1, name: 'WiFi' }, ...]) for the given location.
+      axios.get(`http://localhost:3001/locations/${location.location_id}/amenities-for-location`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(response => {
+          if (response.data && response.data.length > 0) {
+            this.$set(location, 'selected_amenity_ids', response.data.map(am => am.amenity_id)); // Store IDs
+          } else {
+            this.$set(location, 'selected_amenity_ids', []);
+          }
+        })
+        .catch(error => {
+          console.error(`Error loading amenities for location ${location.location_id}:`, error);
+          this.$set(location, 'selected_amenity_ids', []);
         });
     },
 
@@ -507,6 +617,44 @@ export default {
       }
     },
 
+    async fetchWeeklyEarnings(location, token) {
+      this.$set(location, 'loadingWeeklyEarnings', true);
+      try {
+        const response = await axios.get(`http://localhost:3001/locations/${location.location_id}/earnings/weekly`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const earningsData = response.data;
+        if (earningsData && earningsData.length > 0) {
+          const labels = earningsData.map(item => {
+            // Format date for display, e.g., "May 6"
+            const date = new Date(item.week_start_date + 'T00:00:00Z'); // Ensure UTC interpretation
+            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          });
+          const data = earningsData.map(item => parseFloat(item.weekly_earnings));
+          
+          this.$set(location, 'weeklyEarningsData', {
+            labels,
+            datasets: [{
+              label: 'Weekly Earnings',
+              data,
+              borderColor: '#4CAF50',
+              backgroundColor: 'rgba(76, 175, 80, 0.1)',
+              tension: 0.1
+            }]
+          });
+        } else {
+          this.$set(location, 'weeklyEarningsData', { labels: [], datasets: [] }); // Set to empty if no data
+        }
+      } catch (error) {
+        console.error(`Error fetching weekly earnings for location ${location.location_id}:`, error);
+        this.$set(location, 'weeklyEarningsData', { labels: [], datasets: [] }); // Set to empty on error
+        // Optionally, set an error message on the location object for the chart
+        // this.$set(location, 'errorWeeklyEarnings', 'Could not load earnings chart.');
+      } finally {
+        this.$set(location, 'loadingWeeklyEarnings', false);
+      }
+    },
+
     toggleBookingsDisplay(location) {
       this.$set(location, 'showBookingsSection', !location.showBookingsSection);
       // If opening and bookings haven't been loaded (e.g., initial load failed or lazy load)
@@ -517,10 +665,14 @@ export default {
       // }
     },
     
+    goToLocationAnalytics(locationId) {
+      this.$router.push({ name: 'LocationAnalytics', params: { locationId: locationId } });
+    }, // New Method
+
     // Helper method to get the image URL
     getImageUrl(location) {
       if (location && location.coverImage) {
-        return `http://localhost:3001${location.coverImage}`;
+        return location.coverImage; // Assuming coverImage is the full Cloudinary URL
       }
       return ''; // Return empty string if no image
     },
@@ -537,91 +689,179 @@ export default {
         });
     },
 
-    handleSubmit() {
+    triggerFileInput() {
+      this.$refs.fileInput.click();
+    },
+
+    handleFileChange(event) {
+      const files = Array.from(event.target.files);
+      const remainingSlots = 10 - this.previewImages.length;
+
+      if (files.length > remainingSlots) {
+        this.errorMessage = `You can only add ${remainingSlots} more image(s). Max 10 images allowed.`;
+        if (this.$refs.fileInput) {
+            this.$refs.fileInput.value = ''; // Clear the file input
+        }
+        return;
+      }
+
+      files.forEach(file => {
+        // Basic type check (optional, as accept="image/*" should handle it)
+        if (!file.type.startsWith('image/')) {
+            this.errorMessage = `File ${file.name} is not a valid image type.`;
+            return; // Skip this file
+        }
+        // Basic size check (e.g., 5MB limit)
+        if (file.size > 5 * 1024 * 1024) {
+            this.errorMessage = `File ${file.name} exceeds the 5MB size limit.`;
+            return; // Skip this file
+        }
+
+        this.imagesToUpload.push(file);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.previewImages.push({
+            preview: e.target.result,
+            file: file, // Keep reference to the file object for upload
+            isExisting: false,
+            public_id: null // Not yet uploaded
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+
+      if (this.$refs.fileInput) { // Clear the file input to allow re-selecting same files if needed
+          this.$refs.fileInput.value = '';
+      }
+      this.errorMessage = ''; // Clear error message if files are processed
+    },
+
+    removeImage(index) {
+      const imageToRemove = this.previewImages[index];
+
+      if (imageToRemove.isExisting && imageToRemove.public_id) {
+        if (!this.imagesToDelete.includes(imageToRemove.public_id)) {
+          this.imagesToDelete.push(imageToRemove.public_id);
+        }
+      } else {
+        // If it's a newly added image, remove it from imagesToUpload
+        const fileIndex = this.imagesToUpload.findIndex(f => f === imageToRemove.file);
+        if (fileIndex > -1) {
+          this.imagesToUpload.splice(fileIndex, 1);
+        }
+      }
+      this.previewImages.splice(index, 1);
+    },
+
+    async handleSubmit() {
       this.isSubmitting = true;
       this.errorMessage = '';
       this.successMessage = '';
-      
       const token = localStorage.getItem('token');
+
       if (!token) {
         this.$router.push('/login');
+        this.isSubmitting = false;
         return;
       }
-      
+
       const isEditing = !!this.location.location_id;
-      const locationData = { ...this.location };
-      
-      // Make sure we're sending the array of campsite types
-      if (!locationData.campsite_types || locationData.campsite_types.length === 0) {
-        this.errorMessage = 'Please select at least one campsite type';
+      let locationPayload = { ...this.location };
+
+      if (!locationPayload.campsite_types || locationPayload.campsite_types.length === 0) {
+        this.errorMessage = 'Please select at least one campsite type.';
         this.isSubmitting = false;
         return;
       }
       
-      const method = isEditing ? 'put' : 'post';
-      const url = isEditing 
-        ? `http://localhost:3001/locations/${locationData.location_id}` 
-        : 'http://localhost:3001/locations';
-      
-      if (isEditing) {
-        delete locationData.location_id;
-      }
-      
-      axios({
-        method,
-        url,
-        data: locationData,
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(response => {
-        const locationId = isEditing 
-          ? this.location.location_id 
-          : response.data.location_id;
-        
-        // Handle images upload if needed
-        if (this.imagesToUpload.length > 0) {
-          const formData = new FormData();
-          this.imagesToUpload.forEach(file => {
-            formData.append('images', file);
-          });
-          
-          return axios.post(
-            `http://localhost:3001/locations/${locationId}/images`,
-            formData,
-            { 
-              headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'multipart/form-data'
-              }
-            }
-          )
-          .then(() => {
-            this.successMessage = isEditing 
-              ? 'Location updated successfully!' 
-              : 'Location created successfully!';
-            // this.resetForm(); // resetForm is now part of closeLocationForm
-            this.loadUserLocations(); // Reload all locations
-            this.closeLocationForm(); // Close form after successful submission
-          });
-        } else {
-          this.successMessage = isEditing 
-            ? 'Location updated successfully!' 
-            : 'Location created successfully!';
-          // this.resetForm();
-          this.loadUserLocations();
-          this.closeLocationForm();
-        }
-      })
-      .catch(error => {
-        console.error('Error saving location:', error);
-        this.errorMessage = error.response?.data?.error || 'Failed to save location';
-      })
-      .finally(() => {
+      // Image count validation
+      const currentImageCount = this.previewImages.filter(img => !(img.isExisting && this.imagesToDelete.includes(img.public_id))).length;
+      if (currentImageCount < 3) {
+        this.errorMessage = 'A location must have at least 3 images.';
         this.isSubmitting = false;
+        return;
+      }
+      if (currentImageCount > 10) {
+        this.errorMessage = 'A location can have a maximum of 10 images.';
+        this.isSubmitting = false;
+        return;
+      }
+
+
+      const method = isEditing ? 'put' : 'post';
+      const url = isEditing
+        ? `http://localhost:3001/locations/${locationPayload.location_id}`
+        : 'http://localhost:3001/locations';
+
+      if (isEditing) {
+        locationPayload.images_to_delete = this.imagesToDelete;
+      } else {
+        // For new locations, ensure imagesToUpload has content if previewImages does
+        if (this.previewImages.length > 0 && this.imagesToUpload.length === 0) {
+            // This case should ideally not happen if logic is correct, but as a safeguard:
+            console.error("Preview images exist but no files to upload for new location.");
+            this.errorMessage = "Error preparing images for upload. Please re-select images.";
+            this.isSubmitting = false;
+            return;
+        }
+      }
+      // Remove location_id from payload if it's a POST to avoid issues, backend should ignore it anyway
+      if (!isEditing) {
+        delete locationPayload.location_id;
+      }
+
+
+      try {
+        const response = await axios({
+          method,
+          url,
+          data: locationPayload,
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const locationId = isEditing ? locationPayload.location_id : response.data.location_id;
+
+        if (this.imagesToUpload.length > 0) {
+          await this.uploadNewImages(locationId, token);
+        }
+
+        this.successMessage = `Location ${isEditing ? 'updated' : 'created'} successfully!`;
+        this.loadUserLocations(); // Refresh the list
+        this.closeLocationForm(); // This calls resetForm
+
+      } catch (error) {
+        console.error('Error saving location:', error);
+        this.errorMessage = error.response?.data?.error || `Failed to ${isEditing ? 'update' : 'create'} location.`;
+        if (error.message.includes('upload new images')) { // Check if error came from uploadNewImages
+            this.errorMessage = error.message; // Show specific image upload error
+        }
+      } finally {
+        this.isSubmitting = false;
+      }
+    },
+
+    async uploadNewImages(locationId, token) {
+      if (this.imagesToUpload.length === 0) return;
+
+      const formData = new FormData();
+      this.imagesToUpload.forEach(file => {
+        formData.append('images', file);
       });
+
+      try {
+        await axios.post(`http://localhost:3001/locations/${locationId}/images`, formData, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        this.imagesToUpload = []; // Clear after successful upload
+      } catch (error) {
+        console.error('Error uploading new images:', error);
+        throw new Error(error.response?.data?.error || 'Failed to upload new images. Location data may have been saved/updated, but new images failed.');
+      }
     },
     
-    // helper method to reset the form
     resetForm() {
       this.location = {
         name: '',
@@ -630,144 +870,90 @@ export default {
         city: '',
         country: '',
         price_per_night: null,
-        amenities: [], 
-        campsite_type_id: null,
+        booking_policy: '', // Added
+        service_fee_percentage: 10.00, // Added
+        amenities: [],
         campsite_types: [],
         latitude: null,
-        longitude: null
+        longitude: null,
+        location_id: null, // Important to reset or handle ID correctly
+        weeklyEarningsData: { labels: [], datasets: [] }, // Add for chart
+        loadingWeeklyEarnings: false // Add for chart loading state
       };
       this.showManualCoordinates = false;
       this.previewImages = [];
       this.imagesToUpload = [];
+      this.imagesToDelete = []; // Reset this
       
-      // Clear messages
       this.successMessage = '';
       this.errorMessage = '';
+      this.isEditing = false;
+      this.isSubmitting = false;
       
-      console.log('Form reset, amenities:', this.location.amenities);
-      this.isEditing = false; // Ensure isEditing is reset
-      this.previewImages = [];
-      this.imagesToUpload = [];
-      // Do not hide the form here, closeLocationForm will handle it.
+      if (this.$refs.fileInput) {
+        this.$refs.fileInput.value = '';
+      }
+      // console.log('Form reset');
     },
     
     editLocation(locationToEdit) {
-      // Deep clone locationToEdit to avoid modifying the original object in the list directly
-      this.location = JSON.parse(JSON.stringify(locationToEdit));
-      
-      // Ensure amenities and campsite_types are arrays of IDs
-      this.location.amenities = locationToEdit.amenities ? locationToEdit.amenities.map(a => a.amenity_id) : [];
-      
-      // If campsite_types are stored as objects, map to IDs. If already IDs, this is fine.
-      // Assuming locationToEdit.campsite_types is already an array of IDs from the server or previous edits.
-      // If not, adjust this mapping.
-      this.location.campsite_types = locationToEdit.campsite_types || [];
-
-
-      // Handle images - existing images are not directly re-loaded into the form's preview for simplicity here.
-      // The form expects new uploads. If you need to edit existing images, that's a more complex feature.
-      this.previewImages = []; 
-      this.imagesToUpload = [];
-      // If you want to show existing images, you'd populate previewImages from locationToEdit.allImages
-      // For example:
-      // this.previewImages = locationToEdit.allImages ? locationToEdit.allImages.map(img => ({ preview: `http://localhost:3001${img.image_url}`, file: null, id: img.image_id })) : [];
-
-
+      this.resetForm(); // Clear form and reset image arrays first
       this.isEditing = true;
       this.showLocationForm = true;
-      this.successMessage = ''; // Clear messages
+      this.successMessage = '';
       this.errorMessage = '';
+
+      // Deep copy the location object to avoid modifying the original in the list
+      this.location = JSON.parse(JSON.stringify(locationToEdit));
+
+      // Ensure numeric values are numbers, not strings, if they come from JSON.parse
+      this.location.price_per_night = parseFloat(locationToEdit.price_per_night) || null;
+      this.location.latitude = parseFloat(locationToEdit.latitude) || null;
+      this.location.longitude = parseFloat(locationToEdit.longitude) || null;
+      this.location.service_fee_percentage = parseFloat(locationToEdit.service_fee_percentage) || 10.00;
+
+      // Populate selected amenities and campsite types
+      // These should be populated from the detailed load (loadIndividualLocationDetails)
+      this.location.amenities = locationToEdit.selected_amenity_ids ? [...locationToEdit.selected_amenity_ids] : [];
+      this.location.campsite_types = locationToEdit.selected_campsitetype_ids ? [...locationToEdit.selected_campsitetype_ids] : [];
+      
+      // Handle images
+      this.previewImages = [];
+      if (locationToEdit.allImages && locationToEdit.allImages.length > 0) {
+        this.previewImages = locationToEdit.allImages.map(img => ({
+          preview: img.image_url, // This should be the full URL from Cloudinary
+          isExisting: true,
+          public_id: img.public_id, // Make sure your image objects have public_id
+          file: null // No file object for existing images initially
+        }));
+      }
+      // Ensure booking_policy is populated
+      this.location.booking_policy = locationToEdit.booking_policy || '';
     },
 
     deleteLocation(locationId) {
-      if (!confirm('Are you sure you want to delete this location?')) {
+      const confirmed = window.confirm("Are you sure you want to remove this location? This action cannot be undone and all associated data will be lost.");
+      if (!confirmed) {
         return;
       }
 
+      this.isLoadingLocations = true; // Or a specific deleting flag
+      this.successMessage = '';
+      this.errorMessage = '';
       const token = localStorage.getItem('token');
-      if (!token) {
-        this.$router.push('/login');
-        return;
-      }
-
       axios.delete(`http://localhost:3001/locations/${locationId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(() => {
-        this.successMessage = 'Location deleted successfully';
-        this.loadUserLocations();
+        this.userLocations = this.userLocations.filter(loc => loc.location_id !== locationId);
+        this.successMessage = 'Location deleted successfully.';
+        this.isLoadingLocations = false;
       })
       .catch(error => {
-        this.errorMessage = error.response?.data?.error || 'Failed to delete location';
+        console.error('Error deleting location:', error);
+        this.errorMessage = error.response?.data?.error || 'Failed to delete location.';
+        this.isLoadingLocations = false;
       });
-    },
-
-    triggerFileInput() {
-      this.$refs.fileInput.click();
-    },
-
-    handleFileChange(event) {
-      const files = Array.from(event.target.files);
-      
-      // Check if adding these files would exceed the limit
-      if (this.previewImages.length + files.length > 10) {
-        this.errorMessage = "You can upload a maximum of 10 images";
-        return;
-      }
-      
-      files.forEach(file => {
-        // Validate file is an image
-        if (!file.type.match('image.*')) {
-          this.errorMessage = "Please upload only image files";
-          return;
-        }
-        
-        // Create preview URL
-        const reader = new FileReader();
-        reader.onload = e => {
-          this.previewImages.push({
-            preview: e.target.result,
-            file: file
-          });
-        };
-        reader.readAsDataURL(file);
-        
-        // Add to files to be uploaded
-        this.imagesToUpload.push(file);
-      });
-      
-      // Reset the input to allow selecting the same file again
-      event.target.value = '';
-    },
-
-    removeImage(index) {
-      const imageToRemove = this.previewImages[index];
-      
-      // If it's an existing image, delete it from the server
-      if (imageToRemove.isExisting) {
-        const token = localStorage.getItem('token');
-        axios.delete(`http://localhost:3001/images/${imageToRemove.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        .catch(error => {
-          console.error('Error deleting image:', error);
-          this.errorMessage = 'Failed to delete image';
-          return; // Don't continue if deletion failed
-        });
-      }
-      
-      // Remove from preview array
-      this.previewImages.splice(index, 1);
-      
-      // If it's not an existing image, also remove from imagesToUpload
-      if (!imageToRemove.isExisting) {
-        const fileIndex = this.imagesToUpload.findIndex(file => 
-          file === imageToRemove.file
-        );
-        if (fileIndex !== -1) {
-          this.imagesToUpload.splice(fileIndex, 1);
-        }
-      }
     },
 
     async loadLocationImages(locationId) {
@@ -802,10 +988,146 @@ export default {
 
 .location-form-container.card {
   background-color: #fff;
-  padding: 20px;
+  padding: 25px; /* Increased padding */
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   margin-bottom: 30px;
+}
+
+.location-form .form-section {
+  margin-bottom: 25px; /* Increased spacing between sections */
+  padding-bottom: 20px; /* Spacing before border */
+  border-bottom: 1px solid #eee; /* Separator line */
+}
+.location-form .form-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.location-form .section-title {
+  font-size: 1.3rem; /* Slightly larger section titles */
+  color: #333;
+  margin-bottom: 20px; /* Increased space below title */
+  font-weight: 600;
+}
+
+.location-form .form-row {
+  display: flex;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  gap: 20px; /* Space between items in a row */
+  margin-bottom: 15px;
+}
+
+.location-form .form-group {
+  flex: 1 1 calc(50% - 10px); /* Default to 2 columns, accounting for gap */
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 15px; /* Consistent bottom margin */
+}
+
+.location-form .form-group.full-width {
+  flex-basis: 100%;
+}
+
+.location-form label {
+  display: block;
+  margin-bottom: 8px; /* Increased space below label */
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: #454545;
+}
+
+.location-form input[type="text"],
+.location-form input[type="number"],
+.location-form textarea,
+.location-form select {
+  width: 100%;
+  padding: 10px 12px; /* Slightly more padding */
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+.location-form input:focus,
+.location-form textarea:focus,
+.location-form select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+  outline: none;
+}
+
+.location-form textarea {
+  resize: vertical;
+}
+
+.location-form .manual-coordinates-toggle label {
+  font-weight: normal;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+}
+.location-form .manual-coordinates-toggle input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.location-form .form-info p {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-top: 5px;
+  background-color: #f8f9fa;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.location-form .options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); /* Adjust minmax for item size */
+  gap: 10px;
+}
+
+.location-form .option-item label {
+  font-weight: normal;
+  font-size: 0.95rem;
+}
+
+.image-upload-container .image-previews-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* Smaller previews */
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.image-upload-container .preview-img {
+  width: 100%;
+  height: 100px; /* Fixed height for previews */
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.image-upload-container .add-image-placeholder {
+  height: 100px; /* Match preview height */
+}
+
+.form-actions.full-width {
+    flex-basis: 100%;
+    margin-top: 20px; /* Add some space before action buttons */
+}
+
+/* Responsive adjustments for form rows */
+@media (max-width: 768px) {
+  .location-form .form-row {
+    flex-direction: column; /* Stack items in a row on smaller screens */
+    gap: 0; /* Remove gap when stacked, rely on form-group margin */
+  }
+  .location-form .form-group {
+    flex-basis: 100%; /* Full width for groups when stacked */
+    /* margin-bottom is already set */
+  }
+  .location-form .options-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
 }
 
 .my-locations-section h3 {
@@ -858,183 +1180,176 @@ export default {
   font-size: 1.2rem;
 }
 .location-summary p {
-  margin: 2px 0;
+  margin: 4px 0; /* Adjusted margin */
   font-size: 0.9rem;
   color: #555;
 }
 
-.location-stats {
-  margin-bottom: 10px;
-  padding: 10px;
-  background-color: #f9f9f9;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-.location-stats p {
+.location-rating-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 5px 0;
 }
 
-.location-actions {
-  margin-top: auto; /* Pushes actions to the bottom if item is flex column */
-  display: flex;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
+.stars {
+  color: #f8c102; /* Gold color for stars */
+  font-weight: bold;
 }
 
-.action-btn {
-  padding: 6px 12px;
+.reviews-count {
   font-size: 0.85rem;
-}
-
-.location-bookings-details {
-  margin-top: 15px;
-  padding: 15px;
-  background-color: #f7f9fc;
-  border-radius: 6px;
-  border: 1px solid #e0e6ed;
-}
-.location-bookings-details h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
-.booking-tabs {
-  margin-bottom: 10px;
-}
-.booking-tabs button {
-  padding: 8px 12px;
-  margin-right: 5px;
-  border: 1px solid #ccc;
-  background-color: #f0f0f0;
-  cursor: pointer;
-}
-.booking-tabs button.active {
-  background-color: #42b983;
-  color: white;
-  border-color: #42b983;
-}
-.booking-list {
-  list-style: none;
-  padding-left: 0;
-}
-.booking-list li {
-  padding: 5px 0;
-  font-size: 0.9rem;
-  border-bottom: 1px dashed #eee;
-}
-.booking-list li:last-child {
-  border-bottom: none;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #777;
-}
-.loading-state {
-  text-align: center;
-  padding: 20px;
   color: #777;
 }
 
-/* Add styles for primary-btn, secondary-btn if not globally defined */
-.primary-btn {
-  background-color: #42b983;
-  color: white;
-  border: none;
-  padding: 10px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.primary-btn:hover {
-  background-color: #36a476;
-}
-.secondary-btn {
-  background-color: #ccc;
-  color: #333;
-  border: none;
-  padding: 10px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.secondary-btn:hover {
-  background-color: #bbb;
-}
-.form-error, .global-error {
-  background-color: #ffebee;
-  color: #c62828;
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 15px;
-}
-.form-success, .global-success {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 15px;
+.no-reviews-summary {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 5px 0;
 }
 
-/* Responsive adjustments if needed */
-@media (max-width: 768px) {
-  .location-item-header {
-    flex-direction: column;
-  }
-  .location-image, .location-image-placeholder {
-    width: 100%; /* Full width on small screens */
-    height: 150px; /* Adjust height as needed */
-  }
-}
-
-.manage-location {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.manage-location h2 {
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.page-layout {
+.location-stats-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
 }
 
-@media (min-width: 992px) {
-  .page-layout {
-    grid-template-columns: 2fr 1fr;
-  }
-  
-  .location-form {
-    order: 1;
-  }
-  
-  .my-locations {
-    order: 2;
-    align-self: start;
-    position: sticky;
-    top: 20px;
-  }
+.stat-item {
+  background-color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #eee;
 }
 
-.form-section {
-  background-color: white;
+.stat-label {
+  display: block;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  display: block;
+  color: #007bff; /* Highlight value */
+  font-weight: bold;
+}
+
+/* Styles for Image Upload Section */
+.image-upload-container {
+  border: 2px dashed #ccc;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  background-color: #f9f9f9;
+  margin-top: 10px;
+}
+
+.image-previews-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+}
+
+.image-preview-item {
+  position: relative;
   border: 1px solid #ddd;
   border-radius: 4px;
-  padding: 20px;
-  margin-bottom: 20px;
+  overflow: hidden;
+  height: 120px; /* Fixed height for uniform items */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+}
+
+.preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover; /* Changed to cover to fill the box better */
+  display: block;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  line-height: 24px;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+}
+.remove-image-btn:hover {
+  background-color: rgba(255, 0, 0, 0.8);
+}
+
+.add-image-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 120px; /* Match preview item height */
+  border: 2px dashed #007bff;
+  border-radius: 4px;
+  color: #007bff;
+  cursor: pointer;
+  background-color: #eef7ff;
+  transition: background-color 0.3s ease;
+}
+.add-image-placeholder:hover {
+  background-color: #d0e8ff;
+}
+.add-image-placeholder span {
+  font-size: 1rem;
+}
+
+.image-count-feedback {
+  font-size: 0.9rem;
+  color: #555;
+  margin-top: 10px;
+}
+.error-text-small {
+  color: #dc3545;
+  font-size: 0.8rem;
+}
+
+.form-info p {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 5px;
+}
+
+/* General Form Styling Improvements */
+.form-section {
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #eee;
+}
+.form-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .section-title {
-  margin-top: 0;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   color: #333;
+  margin-bottom: 15px;
+  padding-bottom: 5px;
+  border-bottom: 2px solid #007bff;
+  display: inline-block;
 }
 
 .form-group {
@@ -1045,33 +1360,49 @@ export default {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
+  color: #444;
 }
-
 .required-label::after {
-  content: ' *';
+  content: "*";
   color: red;
+  margin-left: 4px;
 }
 
 .form-group input[type="text"],
 .form-group input[type="number"],
-.form-group select,
-.form-group textarea {
+.form-group input[type="email"], /* If you add email fields */
+.form-group textarea,
+.form-group select {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
   border-radius: 4px;
+  box-sizing: border-box;
+  font-size: 1rem;
+  transition: border-color 0.2s ease-in-out;
+}
+.form-group input[type="text"]:focus,
+.form-group input[type="number"]:focus,
+.form-group input[type="email"]:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0,123,255,.25);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
 }
 
 .form-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 15px;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start; /* Align items at the start for varying heights */
 }
-
-@media (min-width: 768px) {
-  .form-row {
-    grid-template-columns: 1fr 1fr;
-  }
+.form-row .form-group {
+  flex: 1; /* Each group takes equal space */
 }
 
 .options-grid {
@@ -1079,124 +1410,271 @@ export default {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 10px;
 }
-
 .option-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  padding: 8px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #eee;
 }
-
 .option-item input[type="checkbox"] {
-  margin-right: 8px;
+  margin-right: 10px;
+  width: 18px; /* Custom size */
+  height: 18px; /* Custom size */
+  cursor: pointer;
 }
-
-.form-info {
-  background-color: #f8f8f8;
-  padding: 10px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-/* Image upload styling */
-.image-upload-container {
-  margin-top: 10px;
-}
-
-.upload-preview {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.preview-item {
-  position: relative;
-  width: 100px;
-  height: 100px;
-  border-radius: 4px;
-  overflow: hidden;
-  border: 1px solid #ddd;
-}
-
-.preview-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.remove-image-btn {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background-color: rgba(255,255,255,0.8);
-  border: 1px solid #ddd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.option-item label {
+  margin-bottom: 0; /* Override default label margin */
+  font-weight: normal;
+  color: #333;
   cursor: pointer;
 }
 
-.upload-placeholder {
-  width: 100px;
-  height: 100px;
-  border: 2px dashed #ddd;
-  border-radius: 4px;
+.form-actions {
+  margin-top: 30px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  gap: 15px;
+  justify-content: flex-end; /* Align buttons to the right */
+}
+
+.primary-btn, .secondary-btn { /* General button styling */
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
   cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.primary-btn {
+  background-color: #007bff;
+  color: white;
+}
+.primary-btn:hover {
+  background-color: #0056b3;
+}
+.primary-btn:disabled {
+  background-color: #a0cfff;
+  cursor: not-allowed;
+}
+.secondary-btn {
+  background-color: #6c757d;
+  color: white;
+}
+.secondary-btn:hover {
+  background-color: #545b62;
 }
 
-.upload-placeholder span {
-  font-size: 30px;
-  color: #ccc;
-}
-
-.file-input {
-  display: none;
-}
-
-.select-images-btn {
-  background-color: #f7f7f7;
-  border: 1px solid #ddd;
+.error-message {
+  color: #dc3545; /* Bootstrap danger color */
+  background-color: #f8d7da; /* Light red background */
+  border: 1px solid #f5c6cb; /* Reddish border */
   padding: 10px 15px;
   border-radius: 4px;
-  cursor: pointer;
-  margin-top: 10px;
+  margin-bottom: 15px;
+  font-size: 0.9rem;
+}
+.error-message.small {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  margin-top: 5px;
 }
 
-.error-text {
-  color: red;
+.success-message {
+  color: #155724; /* Bootstrap success color */
+  background-color: #d4edda; /* Light green background */
+  border: 1px solid #c3e6cb; /* Greenish border */
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin-bottom: 15px;
   font-size: 0.9rem;
 }
 
-/* Form actions */
-.form-actions {
+.empty-state, .loading-state {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+/* Booking details specific styles */
+.location-current-bookings-summary {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 10px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+.location-current-bookings-summary p {
+  margin: 5px 0;
+}
+
+.location-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 15px;
-  margin-top: 30px;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 15px;
+  flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
 }
 
-.submit-btn {
-  background-color: #f7f7f7;
-  border: 1px solid #ddd;
-  padding: 12px 20px;
+.action-btn {
+  padding: 8px 12px; /* Adjusted padding for potentially more buttons */
   border-radius: 4px;
   cursor: pointer;
-  font-weight: 600;
-  flex: 1;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.edit-btn {
+  background-color: #ffc107; /* Yellow */
+  color: #212529;
+  border: 1px solid #dda600;
+}
+.edit-btn:hover {
+  background-color: #e0a800;
+}
+.delete-btn {
+  background-color: #dc3545; /* Red */
+  color: white;
+  border: 1px solid #b02a37;
+}
+.delete-btn:hover {
+  background-color: #c82333;
+}
+.view-bookings-btn {
+  background-color: #17a2b8; /* Teal */
+  color: white;
+  border: 1px solid #128293;
+}
+.view-bookings-btn:hover {
+  background-color: #138496;
+}
+.analytics-btn {
+  background-color: #28a745; /* Green */
+  color: white;
+  border: 1px solid #1e7e34;
+}
+.analytics-btn:hover {
+  background-color: #218838;
 }
 
-.cancel-btn {
-  background-color: #f7f7f7;
-  border: 1px solid #ddd;
-  padding: 12px 20px;
+.location-bookings-details {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid #eee;
   border-radius: 4px;
+  background-color: #fdfdfd;
+}
+.location-bookings-details h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.1rem;
+}
+
+.booking-tabs {
+  display: flex;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #ddd;
+}
+.booking-tabs button {
+  padding: 8px 15px;
+  border: none;
+  background-color: transparent;
   cursor: pointer;
+  font-size: 0.95rem;
+  color: #007bff;
+  border-bottom: 2px solid transparent; /* For active state */
+  margin-bottom: -1px; /* Align with parent border */
+}
+.booking-tabs button.active {
+  font-weight: bold;
+  border-bottom-color: #007bff;
+  color: #0056b3;
+}
+.booking-tabs button:hover:not(.active) {
+  background-color: #f0f0f0;
+}
+
+.booking-list {
+  list-style-type: none;
+  padding-left: 0;
+}
+.booking-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+  color: #444;
+}
+.booking-list li:last-child {
+  border-bottom: none;
+}
+
+/* New styles for improved space utilization */
+
+/* Responsive adjustments for the list of locations */
+@media (min-width: 769px) { /* For tablets and wider */
+  .locations-list {
+    /* Allow for 2 or 3 columns depending on available width */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}
+
+/* Responsive adjustments for the location add/edit form */
+@media (min-width: 992px) { /* Apply two-column layout for form sections on wider screens */
+  .location-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    gap: 30px; /* Adjust gap as needed for rows and columns */
+    align-items: start; /* Align items at the start of their grid area */
+  }
+
+  .location-form > .form-section {
+    margin-bottom: 0; /* Grid gap will handle spacing between sections */
+    border-bottom: none; /* Remove bottom border in grid layout */
+    padding-bottom: 0; /* Remove padding associated with the bottom border */
+    /* Sections will flow automatically:
+       Section 1: Col 1, Row 1
+       Section 2: Col 2, Row 1
+       Section 3: Col 1, Row 2
+       Section 4: Col 2, Row 2
+       etc.
+    */
+  }
+
+  .location-form > .images-section,
+  .location-form > .form-actions {
+    grid-column: 1 / -1; /* Make these sections span both columns */
+  }
+  
+  .location-form > .form-actions { /* Ensure form-actions retains its specific margin if different */
+    margin-top: 10px; /* Add some space above the full-width actions */
+  }
+}
+
+/* End of new styles for space utilization */
+
+/* Responsive adjustments if needed */
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 0; /* Remove gap if stacked */
+  }
+  .form-row .form-group {
+    width: 100%; /* Full width for stacked items */
+    margin-bottom: 15px; /* Add margin between stacked items */
+  }
+  .locations-list {
+    grid-template-columns: 1fr; /* Stack location items on smaller screens */
+  }
+  .location-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .location-image, .location-image-placeholder {
+    margin-bottom: 10px;
+  }
+  .location-stats-grid {
+    grid-template-columns: 1fr; /* Stack stats on smaller screens */
+  }
 }
 
 /* My locations styling */
@@ -1275,5 +1753,107 @@ export default {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.earnings-chart-container {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #fdfdfd;
+  border: 1px solid #eee;
+  border-radius: 8px;
+}
+
+.earnings-chart-container h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+/* Add any additional specific styling for the chart container if needed */
+
+/* Ensure action buttons have consistent styling and specific overrides */
+.location-actions .action-btn {
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid transparent;
+  margin: 5px; /* Add some margin for spacing */
+}
+
+/* Edit Button - Blue */
+.location-actions .edit-btn {
+  background-color: #007bff; /* Primary blue */
+  color: white;
+  border-color: #007bff;
+}
+
+.location-actions .edit-btn:hover {
+  background-color: #0056b3; /* Darker blue on hover */
+  border-color: #0056b3;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Delete Button - Red */
+.location-actions .delete-btn {
+  background-color: #dc3545; /* Danger red */
+  color: white;
+  border-color: #dc3545;
+}
+
+.location-actions .delete-btn:hover {
+  background-color: #c82333; /* Darker red on hover */
+  border-color: #c82333;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Other action buttons (View Bookings, Analytics) - Secondary/Outline style */
+.location-actions .view-bookings-btn,
+.location-actions .analytics-btn {
+  background-color: #6c757d; /* Secondary gray */
+  color: white;
+  border-color: #6c757d;
+}
+
+.location-actions .view-bookings-btn:hover,
+.location-actions .analytics-btn:hover {
+  background-color: #5a6268; /* Darker gray on hover */
+  border-color: #545b62;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+
+/* General Button Styles (if not already globally defined or to override) */
+.primary-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  background-color: #007bff;
+  color: white;
+}
+.primary-btn:hover {
+  background-color: #0056b3;
+}
+.primary-btn:disabled {
+  background-color: #a0cfff;
+  cursor: not-allowed;
+}
+.secondary-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  background-color: #6c757d;
+  color: white;
+}
+.secondary-btn:hover {
+  background-color: #545b62;
 }
 </style>
