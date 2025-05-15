@@ -255,14 +255,31 @@ export default {
     },
     invalidDates() {
       if (!this.dateRange.start || !this.dateRange.end) {
+        return true; // No dates selected is invalid
+      }
+
+      const startDate = new Date(this.dateRange.start);
+      startDate.setHours(0, 0, 0, 0); // Normalize start date to the beginning of the day
+
+      const endDate = new Date(this.dateRange.end);
+      endDate.setHours(0, 0, 0, 0); // Normalize end date to the beginning of the day
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalize today to the beginning of the day
+
+      // Check 1: Start date must not be in the past.
+      if (startDate < today) {
         return true;
       }
-      const start = new Date(this.dateRange.start);
-      const end = new Date(this.dateRange.end);
-      const today = new Date();
-      today.setHours(0,0,0,0); // Normalize today
 
-      return start < today || start >= end || this.nights <= 0;
+      // Check 2: End date must be strictly after the start date.
+      // (i.e., booking must be for at least one night)
+      if (endDate <= startDate) {
+        return true;
+      }
+      
+      // If all checks pass, the dates are valid.
+      return false;
     }
   },
   watch: {
@@ -299,14 +316,20 @@ export default {
     },
     formatDateForBackend(date) { // Helper to convert Date object to YYYY-MM-DD string
         if (!date) return null;
-        try {
-            // Ensure 'date' is a Date object before calling toISOString
-            const dateObj = date instanceof Date ? date : new Date(date);
-            return dateObj.toISOString().split('T')[0];
-        } catch (e) {
-            console.error("Error formatting date for backend:", date, e);
-            return null; // Or handle error as appropriate
+        // Ensure 'date' is a Date object
+        const dateObj = date instanceof Date ? date : new Date(date);
+        
+        // Check if dateObj is a valid date after potential conversion
+        if (isNaN(dateObj.getTime())) {
+            console.error("Error formatting date for backend: Invalid date provided", date);
+            return null;
         }
+
+        const year = dateObj.getFullYear();
+        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0'); // getMonth() is 0-indexed
+        const day = dateObj.getDate().toString().padStart(2, '0');
+        
+        return `${year}-${month}-${day}`;
     },
     initializeBookingDatesFromQuery(query) {
       const { checkIn, checkOut, nights: queryNights } = query;

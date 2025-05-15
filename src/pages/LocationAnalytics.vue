@@ -2,10 +2,10 @@
   <div class="location-analytics-page">
     <button @click="goBackToManageLocations" class="back-button">← Back to Manage Locations</button>
     <h1>Location Analytics for {{ locationName || 'Unknown Location' }}</h1>
-    <div v-if="isLoading" class="loading-message">Loading analytics...</div>
+    <div v-if="isLoading && !bookings.length" class="loading-message">Loading analytics...</div> <!-- Adjusted v-if for initial load -->
     <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
 
-    <div v-if="!isLoading && !errorMessage" class="analytics-content">
+    <div v-if="!isLoading || bookings.length > 0" class="analytics-content"> <!-- Adjusted v-if for showing content once loaded or if bookings are present -->
       <section class="calendar-section card">
         <h2>Booking Calendar</h2>
         <v-calendar
@@ -23,9 +23,14 @@
 
       <section class="stats-section card">
         <h2>Key Metrics for Current Month</h2>
-        <p>Total Confirmed Bookings (in current month): {{ totalConfirmedBookingsInMonth }}</p>
-        <p>Occupancy Rate (current month): {{ occupancyRate }}%</p>
-        <!-- Add more detailed stats as needed -->
+        <p>Total Confirmed Bookings: {{ totalConfirmedBookingsInMonth }}</p>
+        <p>Total Revenue: ${{ totalRevenueInMonth.toFixed(2) }}</p>
+        <p>Average Daily Rate (ADR): ${{ averageDailyRateInMonth.toFixed(2) }}</p>
+        <p>Average Length of Stay: {{ averageLengthOfStayInMonth.toFixed(1) }} nights</p>
+        <p>Occupancy Rate: {{ occupancyRate.toFixed(2) }}%</p>
+        <p>Cancellation Rate: {{ cancellationRateInMonth.toFixed(2) }}%</p>
+
+        
       </section>
     </div>
   </div>
@@ -33,14 +38,16 @@
 
 <script>
 import axios from 'axios';
-// For v-calendar 2.x, ensure you installed with npm install v-calendar@^2.4.1 or similar
-import { Calendar } from 'v-calendar'; 
-import 'v-calendar/src/styles/base.css'; // Corrected CSS import path for v-calendar v2.x
+import { Calendar } from 'v-calendar';
+import 'v-calendar/src/styles/base.css';
+
+// Removed Pie and Bar imports from vue-chartjs
 
 export default {
   name: 'LocationAnalytics',
   components: {
     VCalendar: Calendar,
+    // Removed PieChart and BarChart components
   },
   data() {
     return {
@@ -50,10 +57,16 @@ export default {
       calendarAttributes: [],
       isLoading: true,
       errorMessage: '',
-      totalConfirmedBookingsInMonth: 0, // Renamed for clarity
+      totalConfirmedBookingsInMonth: 0,
       occupancyRate: 0,
+      totalRevenueInMonth: 0,
+      averageDailyRateInMonth: 0,
+      cancellationRateInMonth: 0,
+      averageLengthOfStayInMonth: 0,
       currentMonth: new Date().getMonth(),
       currentYear: new Date().getFullYear(),
+
+      // Removed all chart specific data properties (e.g., occupancyChartData, chartOptions)
     };
   },
   created() {
@@ -65,6 +78,7 @@ export default {
       this.errorMessage = 'Location ID not provided in route parameters.';
       this.isLoading = false;
       console.error(this.errorMessage);
+      // Removed call to initializeEmptyChartData()
     }
   },
   methods: {
@@ -90,6 +104,8 @@ export default {
     async fetchLocationDetailsAndBookings() {
       this.isLoading = true;
       this.errorMessage = ''; // Reset error message
+      // Removed call to initializeEmptyChartData()
+
       try {
         // Fetch location details (name)
         const token = localStorage.getItem('token');
@@ -120,22 +136,25 @@ export default {
       } catch (error) {
         console.error('Error fetching location data:', error);
         this.errorMessage = `Failed to load location analytics. ${error.response ? error.response.data.error || error.message : error.message}`;
+        // Removed call to initializeEmptyChartData()
       } finally {
         this.isLoading = false;
         console.log(`Finished loading. isLoading: ${this.isLoading}, errorMessage: ${this.errorMessage}`);
       }
     },
+    // Removed initializeEmptyChartData() method
+
     processBookingsData() {
       if (!Array.isArray(this.bookings)) {
         console.error('Bookings data is not an array:', this.bookings);
         this.errorMessage = 'Received invalid booking data format.';
         this.bookings = []; // Ensure bookings is an array
+        // Removed call to initializeEmptyChartData()
       }
       
-      // totalConfirmedBookingsInMonth will be calculated in calculateOccupancyRate
       this.prepareCalendarAttributes();
-      this.calculateOccupancyRate(); // This will also set totalConfirmedBookingsInMonth
-      console.log('Calendar attributes prepared:', this.calendarAttributes);
+      this.calculateMonthlyMetrics(); // Changed from calculateOccupancyRate
+      console.log('Calendar attributes prepared, monthly metrics calculated.');
     },
     prepareCalendarAttributes() {
       const attributes = [];
@@ -147,37 +166,39 @@ export default {
 
       // 1. Process bookings: Add RED HIGHLIGHT attributes for occupied periods 
       //    AND populate occupiedDateStrings set with each individual occupied day.
-      this.bookings.forEach(booking => {
-        if (booking.status_name === 'confirmed' || booking.status_name === 'active') {
-          const startDate = new Date(booking.start_date);
-          const endDate = new Date(booking.end_date);
+      if (Array.isArray(this.bookings)) {
+        this.bookings.forEach(booking => {
+          if (booking.status_name === 'confirmed' || booking.status_name === 'active') {
+            const startDate = new Date(booking.start_date);
+            const endDate = new Date(booking.end_date);
 
-          // Normalize to UTC for consistent date handling and string formatting
-          const localBookingStart = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
-          const localBookingEnd = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+            // Normalize to UTC for consistent date handling and string formatting
+            const localBookingStart = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+            const localBookingEnd = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
 
-          attributes.push({
-            key: `booking-highlight-${booking.booking_id}`,
-            highlight: {
-              color: 'red',
-              fillMode: 'solid',
-            },
-            dates: { start: localBookingStart, end: localBookingEnd },
-            popover: {
-              label: `Occupied - Booking ID: ${booking.booking_id}${booking.user_name ? ', Guest: ' + booking.user_name : ''}`,
-              visibility: 'hover',
-            },
-            order: 1 // Occupied highlights take precedence
-          });
+            attributes.push({
+              key: `booking-highlight-${booking.booking_id}`,
+              highlight: {
+                color: 'red',
+                fillMode: 'solid',
+              },
+              dates: { start: localBookingStart, end: localBookingEnd },
+              popover: {
+                label: `Occupied - Booking ID: ${booking.booking_id}${booking.user_name ? ', Guest: ' + booking.user_name : ''}`,
+                visibility: 'hover',
+              },
+              order: 1 // Occupied highlights take precedence
+            });
 
-          // Add each day within this booking to the occupiedDateStrings set
-          let currentDateIterator = new Date(localBookingStart);
-          while (currentDateIterator <= localBookingEnd) {
-            occupiedDateStrings.add(currentDateIterator.toISOString().split('T')[0]);
-            currentDateIterator.setUTCDate(currentDateIterator.getUTCDate() + 1);
+            // Add each day within this booking to the occupiedDateStrings set
+            let currentDateIterator = new Date(localBookingStart);
+            while (currentDateIterator <= localBookingEnd) {
+              occupiedDateStrings.add(currentDateIterator.toISOString().split('T')[0]);
+              currentDateIterator.setUTCDate(currentDateIterator.getUTCDate() + 1);
+            }
           }
-        }
-      });
+        });
+      }
 
       // 2. Determine truly available dates (those NOT in occupiedDateStrings) 
       //    and prepare them for the BLUE DOT indicator.
@@ -209,62 +230,125 @@ export default {
       
       this.calendarAttributes = attributes;
     },
-    calculateOccupancyRate() {
+    // Renamed from calculateOccupancyRate and enhanced
+    calculateMonthlyMetrics() {
       const year = this.currentYear;
-      const month = this.currentMonth;
+      const month = this.currentMonth; // 0-indexed
       const daysInCurrentMonth = new Date(year, month + 1, 0).getDate();
-      
+
       let occupiedDaysInMonth = 0;
-      let currentMonthBookingsCount = 0;
+      let currentMonthConfirmedBookingsCount = 0;
+      let totalRevenueForMonth = 0;
+      let totalNightsForAllBookingsInMonth = 0;
+      let bookingsTouchingMonthCountForAvgStay = 0; // For avg. length of stay denominator
+      
+      let cancelledBookingsInMonthCount = 0;
+      let allBookingsTouchingMonthCountForCancellation = 0; // For cancellation rate denominator
+
+      // Removed sanitizeRateForChart helper function
+
+      if (!Array.isArray(this.bookings) || this.bookings.length === 0) {
+        this.totalConfirmedBookingsInMonth = 0;
+        this.occupancyRate = 0;
+        this.totalRevenueInMonth = 0;
+        this.averageDailyRateInMonth = 0;
+        this.cancellationRateInMonth = 0;
+        this.averageLengthOfStayInMonth = 0;
+        // Removed call to initializeEmptyChartData()
+        console.log('No bookings data to process for metrics.');
+        return;
+      }
 
       this.bookings.forEach(booking => {
-        if (booking.status_name === 'confirmed' || booking.status_name === 'active') {
-          const bookingStart = new Date(booking.start_date);
-          const bookingEnd = new Date(booking.end_date);
+        const bookingStart = new Date(booking.start_date);
+        const bookingEnd = new Date(booking.end_date);
+        const localBookingStart = new Date(Date.UTC(bookingStart.getUTCFullYear(), bookingStart.getUTCMonth(), bookingStart.getUTCDate()));
+        const localBookingEnd = new Date(Date.UTC(bookingEnd.getUTCFullYear(), bookingEnd.getUTCMonth(), bookingEnd.getUTCDate()));
 
-          // Normalize to UTC dates to avoid timezone shifts when comparing month/year
-          const localBookingStart = new Date(Date.UTC(bookingStart.getUTCFullYear(), bookingStart.getUTCMonth(), bookingStart.getUTCDate()));
-          const localBookingEnd = new Date(Date.UTC(bookingEnd.getUTCFullYear(), bookingEnd.getUTCMonth(), bookingEnd.getUTCDate()));
-          
-          // Check if the booking is in the current month and year
-          if (localBookingStart.getUTCFullYear() === year && localBookingStart.getUTCMonth() === month) {
-            currentMonthBookingsCount++;
-          } else if (localBookingEnd.getUTCFullYear() === year && localBookingEnd.getUTCMonth() === month) {
-            // Catches bookings that end in the current month but started earlier
-             currentMonthBookingsCount++; // Count it if any part is in the month
-          } else if (localBookingStart.getUTCFullYear() < year || (localBookingStart.getUTCFullYear() === year && localBookingStart.getUTCMonth() < month)) {
-            if (localBookingEnd.getUTCFullYear() > year || (localBookingEnd.getUTCFullYear() === year && localBookingEnd.getUTCMonth() > month)) {
-              // Booking spans across the entire current month
-              currentMonthBookingsCount++;
-            }
+        const firstDayOfMonthUTC = new Date(Date.UTC(year, month, 1));
+        const lastDayOfMonthUTC = new Date(Date.UTC(year, month, daysInCurrentMonth, 23, 59, 59, 999));
+
+        // Check if the booking overlaps with the current month
+        const bookingTouchesCurrentMonth = localBookingStart <= lastDayOfMonthUTC && localBookingEnd >= firstDayOfMonthUTC;
+
+        if (bookingTouchesCurrentMonth) {
+          allBookingsTouchingMonthCountForCancellation++;
+
+          if (booking.status_name === 'cancelled') {
+            cancelledBookingsInMonthCount++;
           }
 
+          if (booking.status_name === 'confirmed' || booking.status_name === 'active') {
+            currentMonthConfirmedBookingsCount++;
+            bookingsTouchingMonthCountForAvgStay++;
 
-          // Calculate duration within the current month
-          const startDayOfMonth = new Date(Date.UTC(year, month, 1));
-          const endDayOfMonth = new Date(Date.UTC(year, month, daysInCurrentMonth, 23, 59, 59, 999));
+            // Calculate duration of the booking within the current month
+            const effectiveStartDateInMonth = localBookingStart < firstDayOfMonthUTC ? firstDayOfMonthUTC : localBookingStart;
+            const effectiveEndDateInMonth = localBookingEnd > lastDayOfMonthUTC ? lastDayOfMonthUTC : localBookingEnd;
+            
+            // Calculate days this booking is active within the current month (+1 because it's inclusive of start and end day)
+            const daysInMonthForThisBooking = Math.max(0, (effectiveEndDateInMonth.getTime() - effectiveStartDateInMonth.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            occupiedDaysInMonth += daysInMonthForThisBooking;
 
-          const effectiveStartDate = localBookingStart < startDayOfMonth ? startDayOfMonth : localBookingStart;
-          const effectiveEndDate = localBookingEnd > endDayOfMonth ? endDayOfMonth : localBookingEnd;
-          
-          if (effectiveStartDate <= effectiveEndDate) { // Ensure the period is valid and within the month
-            // Calculate days, add 1 because it's inclusive
-            const durationInMonth = Math.ceil((effectiveEndDate - effectiveStartDate) / (1000 * 60 * 60 * 24)) + 1;
-            // Ensure we only count days actually within the month's bounds
-             if (localBookingStart <= endDayOfMonth && localBookingEnd >= startDayOfMonth) {
-                occupiedDaysInMonth += durationInMonth;
-             }
+            // Revenue calculation: Use total_price from the booking directly if status is confirmed/active
+            // This assumes total_price is for the entire booking duration.
+            // If a booking spans multiple months, this will credit the full booking price to each month it touches.
+            // For a more accurate monthly revenue, you'd prorate the total_price based on days in *this* month.
+            // However, the prompt asks to sum the amount of each booking for revenue.
+            if (typeof booking.total_price === 'number' && booking.total_price > 0) {
+              totalRevenueForMonth += booking.total_price;
+            } else {
+              console.warn(`Booking ID ${booking.booking_id} (status: ${booking.status_name}) has ${daysInMonthForThisBooking} day(s) in the current month but no valid total_price (${booking.total_price}). Revenue contribution for this booking in this month will be 0.`, booking);
+            }
+
+            // Average Length of Stay: sum of total nights of bookings active in the month
+            // Total nights for this specific booking (end date - start date)
+            const totalNightsThisBooking = Math.max(1, Math.ceil((localBookingEnd.getTime() - localBookingStart.getTime()) / (1000 * 60 * 60 * 24)));
+            totalNightsForAllBookingsInMonth += totalNightsThisBooking;
           }
         }
       });
       
-      this.totalConfirmedBookingsInMonth = currentMonthBookingsCount;
-
-      // Clamp occupiedDaysInMonth to not exceed daysInCurrentMonth
+      this.totalConfirmedBookingsInMonth = currentMonthConfirmedBookingsCount;
+      
+      // Clamp occupiedDaysInMonth to not exceed daysInCurrentMonth (e.g. for a single unit location)
       occupiedDaysInMonth = Math.min(occupiedDaysInMonth, daysInCurrentMonth);
 
-      this.occupancyRate = daysInCurrentMonth > 0 ? parseFloat(((occupiedDaysInMonth / daysInCurrentMonth) * 100).toFixed(2)) : 0;
-      console.log(`Occupancy Rate: ${this.occupancyRate}%, Occupied Days: ${occupiedDaysInMonth}, Days in Month: ${daysInCurrentMonth}, Bookings in Month: ${this.totalConfirmedBookingsInMonth}`);
+      // Occupancy Rate
+      if (daysInCurrentMonth > 0) {
+        const rawOccupancyRate = (occupiedDaysInMonth / daysInCurrentMonth) * 100;
+        this.occupancyRate = parseFloat(rawOccupancyRate.toFixed(2));
+        // Removed occupancyChartData assignment
+      } else {
+        this.occupancyRate = 0;
+        // Removed occupancyChartData assignment
+      }
+
+      this.totalRevenueInMonth = parseFloat(totalRevenueForMonth.toFixed(2));
+
+      this.averageDailyRateInMonth = occupiedDaysInMonth > 0 ? parseFloat((totalRevenueForMonth / occupiedDaysInMonth).toFixed(2)) : 0;
+      
+      this.averageLengthOfStayInMonth = bookingsTouchingMonthCountForAvgStay > 0 ? parseFloat((totalNightsForAllBookingsInMonth / bookingsTouchingMonthCountForAvgStay).toFixed(1)) : 0;
+
+      // Cancellation Rate
+      if (allBookingsTouchingMonthCountForCancellation > 0) {
+        const rawCancellationRate = (cancelledBookingsInMonthCount / allBookingsTouchingMonthCountForCancellation) * 100;
+        this.cancellationRateInMonth = parseFloat(rawCancellationRate.toFixed(2));
+        // Removed cancellationChartData assignment
+      } else {
+        this.cancellationRateInMonth = 0;
+        // Removed cancellationChartData assignment
+      }
+
+      // Removed assignments for bookingsChartData, revenueChartData, adrChartData, avgStayChartData
+
+      console.log(`Monthly Metrics for ${month + 1}/${year}:`);
+      console.log(`  Total Confirmed Bookings: ${this.totalConfirmedBookingsInMonth}`);
+      console.log(`  Occupancy Rate: ${this.occupancyRate}% (Occupied Days: ${occupiedDaysInMonth}, Days in Month: ${daysInCurrentMonth})`);
+      console.log(`  Total Revenue: ${this.totalRevenueInMonth}`);
+      console.log(`  Average Daily Rate (ADR): ${this.averageDailyRateInMonth}`);
+      console.log(`  Average Length of Stay: ${this.averageLengthOfStayInMonth} nights`);
+      console.log(`  Cancellation Rate: ${this.cancellationRateInMonth}% (Cancelled: ${cancelledBookingsInMonthCount}, Total Considered: ${allBookingsTouchingMonthCountForCancellation})`);
     },
     onDayClick(day) {
       console.log('Day clicked:', day.date, 'Attributes on this day:', day.attributes);
@@ -377,25 +461,15 @@ export default {
 }
 
 .color-box.occupied {
-  background-color: red;
+  background-color: red; /* Corresponds to booking highlight */
 }
 
 .stats-section p {
   font-size: 1.1em;
-  margin-bottom: 10px;
+  line-height: 1.6;
   color: #555;
+  margin-bottom: 10px; /* Add some space between metric paragraphs */
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .location-analytics-page {
-    padding: 15px;
-  }
-  .analytics-content h1 {
-    font-size: 1.8em;
-  }
-  .analytics-content h2 {
-    font-size: 1.3em;
-  }
-}
+/* Removed .charts-grid and .chart-container styles */
 </style>

@@ -36,7 +36,7 @@
         
         <!-- Price Range Filter -->
         <div class="filter-group">
-          <h4>Maximum Price: €{{ maxPriceFilter }}</h4>
+          <h4>Price</h4>
           <div class="price-range">
             <input 
               type="range" 
@@ -177,7 +177,7 @@
           <input type="text" v-model="mapFilters.locationQuery" placeholder="Filter by City or Country" @input="applyMapFilters" class="filter-input">
           
           <div class="filter-group">
-            <h4>Max Price: €{{ mapFilters.priceRange.max }}</h4>
+            <h4>Price</h4>
             <input 
               type="range" 
               v-model.number="mapFilters.priceRange.max" 

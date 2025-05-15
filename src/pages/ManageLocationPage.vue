@@ -292,35 +292,11 @@
 
           <div class="location-stats-grid">
             <div class="stat-item">
-              <span class="stat-label">Earnings (Last Week):</span>
-              <span class="stat-value">€{{ location.earnings_last_week ? location.earnings_last_week.toFixed(2) : '0.00' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Earnings (Last Month):</span>
-              <span class="stat-value">€{{ location.earnings_last_month ? location.earnings_last_month.toFixed(2) : '0.00' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Earnings (Last Year):</span>
-              <span class="stat-value">€{{ location.earnings_last_year ? location.earnings_last_year.toFixed(2) : '0.00' }}</span>
-            </div>
-            <div class="stat-item">
               <span class="stat-label">Total Bookings:</span>
               <span class="stat-value">{{ location.total_bookings }}</span>
             </div>
           </div>
 
-          <!-- Weekly Earnings Chart -->
-          <div class="earnings-chart-container" v-if="location.weeklyEarningsData && location.weeklyEarningsData.labels && location.weeklyEarningsData.labels.length > 0">
-            <h4>Weekly Earnings Trend</h4>
-            <weekly-earnings-chart :chartDataProp="location.weeklyEarningsData" />
-          </div>
-          <div v-else-if="location.loadingWeeklyEarnings">
-            <p>Loading weekly earnings chart...</p>
-          </div>
-          <div v-else>
-            <p>No weekly earnings data available to display chart.</p>
-          </div>
-          
           <div class="location-current-bookings-summary">
             <p>Active Bookings: {{ activeBookingsFor(location).length }}</p>
             <p>Past/Cancelled Bookings: {{ pastBookingsFor(location).length }}</p>
@@ -376,13 +352,9 @@
 
 <script>
 import axios from 'axios';
-import WeeklyEarningsChart from '@/components/WeeklyEarningsChart.vue'; // Import the chart component
 
 export default {
   name: 'ManageLocationPage',
-  components: { // Register the chart component
-    WeeklyEarningsChart
-  },
   data() {
     return {
       location: {
@@ -392,33 +364,31 @@ export default {
         city: '',
         country: '',
         price_per_night: null,
-        booking_policy: '', // Added
-        service_fee_percentage: 10.00, // Added, default to 10%
-        amenities: [], // Will store array of IDs
-        campsite_types: [], // Will store array of IDs
+        booking_policy: '',
+        service_fee_percentage: 10.00,
+        amenities: [],
+        campsite_types: [],
         latitude: null,
         longitude: null,
-        location_id: null, // Ensure this is part of the location model for editing
-        weeklyEarningsData: { labels: [], datasets: [] }, // Add for chart
-        loadingWeeklyEarnings: false // Add for chart loading state
+        location_id: null,
       },
+      userLocations: [],
       showLocationForm: false,
-      isLoadingLocations: true,
-      showManualCoordinates: false,
-      amenities: [], // List of all available amenities
-      campsiteTypes: [], // List of all available campsite types
+      isEditing: false,
       isSubmitting: false,
+      isLoadingLocations: true,
       errorMessage: '',
       successMessage: '',
-      userLocations: [],
-      isEditing: false,
-      infoMessage: '',
-      previewImages: [], // For displaying image previews in the form
-      imagesToUpload: [], // For new image files to be uploaded
-      imagesToDelete: [] // For public_ids of existing images to be deleted
-    }
+      amenities: [],
+      campsiteTypes: [],
+      previewImages: [],
+      filesToUpload: [],
+      existingImageUrls: [], // Store URLs of existing images when editing
+      imagesToRemove: [], // Store IDs/URLs of images marked for removal
+      showManualCoordinates: false,
+    };
   },
-  computed: { // New computed properties for filtering bookings per location
+  computed: {
     activeBookingsFor() {
       return (location) => {
         if (!location || !location.bookings) return [];
@@ -517,8 +487,6 @@ export default {
             // activeBookingsCount and pastBookingsCount will be derived from bookings array later
             loadingLocationBookings: false,
             activeTab: 'active',
-            weeklyEarningsData: { labels: [], datasets: [] }, // Initialize for chart
-            loadingWeeklyEarnings: false // Initialize for chart loading state
           };
         });
         
@@ -529,7 +497,6 @@ export default {
         this.userLocations.forEach(detailedLoc => {
           this.loadIndividualLocationDetails(detailedLoc, token); 
           this.fetchBookingsForLocation(detailedLoc, token); 
-          this.fetchWeeklyEarnings(detailedLoc, token); // Fetch earnings data
         });
       })
       .catch(error => {
@@ -614,44 +581,6 @@ export default {
         this.$set(location, 'errorMessageBookings', 'Could not load bookings.');
       } finally {
         this.$set(location, 'loadingLocationBookings', false);
-      }
-    },
-
-    async fetchWeeklyEarnings(location, token) {
-      this.$set(location, 'loadingWeeklyEarnings', true);
-      try {
-        const response = await axios.get(`http://localhost:3001/locations/${location.location_id}/earnings/weekly`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const earningsData = response.data;
-        if (earningsData && earningsData.length > 0) {
-          const labels = earningsData.map(item => {
-            // Format date for display, e.g., "May 6"
-            const date = new Date(item.week_start_date + 'T00:00:00Z'); // Ensure UTC interpretation
-            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-          });
-          const data = earningsData.map(item => parseFloat(item.weekly_earnings));
-          
-          this.$set(location, 'weeklyEarningsData', {
-            labels,
-            datasets: [{
-              label: 'Weekly Earnings',
-              data,
-              borderColor: '#4CAF50',
-              backgroundColor: 'rgba(76, 175, 80, 0.1)',
-              tension: 0.1
-            }]
-          });
-        } else {
-          this.$set(location, 'weeklyEarningsData', { labels: [], datasets: [] }); // Set to empty if no data
-        }
-      } catch (error) {
-        console.error(`Error fetching weekly earnings for location ${location.location_id}:`, error);
-        this.$set(location, 'weeklyEarningsData', { labels: [], datasets: [] }); // Set to empty on error
-        // Optionally, set an error message on the location object for the chart
-        // this.$set(location, 'errorWeeklyEarnings', 'Could not load earnings chart.');
-      } finally {
-        this.$set(location, 'loadingWeeklyEarnings', false);
       }
     },
 
@@ -877,8 +806,6 @@ export default {
         latitude: null,
         longitude: null,
         location_id: null, // Important to reset or handle ID correctly
-        weeklyEarningsData: { labels: [], datasets: [] }, // Add for chart
-        loadingWeeklyEarnings: false // Add for chart loading state
       };
       this.showManualCoordinates = false;
       this.previewImages = [];
@@ -1754,23 +1681,6 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-.earnings-chart-container {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: #fdfdfd;
-  border: 1px solid #eee;
-  border-radius: 8px;
-}
-
-.earnings-chart-container h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 1.1rem;
-  color: #333;
-}
-
-/* Add any additional specific styling for the chart container if needed */
 
 /* Ensure action buttons have consistent styling and specific overrides */
 .location-actions .action-btn {

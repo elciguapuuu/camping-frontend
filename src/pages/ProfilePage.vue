@@ -357,10 +357,12 @@ export default {
         this.userBookings = response.data.map(booking => {
           let finalCoverImageUrl = null; // Default to null
           
-          const locationData = booking.location;
-          const backendCoverUrl = locationData ? locationData.cover_image_url : null;
+          // Directly use cover_image_url from the booking object itself
+          const backendCoverUrl = booking.cover_image_url;
+          // locationData can still be used if other location properties are needed from a nested object
+          const locationData = booking.location; 
 
-          console.log(`[ProfilePage] Processing booking ID ${booking.booking_id}, location: ${booking.location_name}. Has locationData: ${!!locationData}. Backend cover_image_url: ${backendCoverUrl}`);
+          console.log(`[ProfilePage] Processing booking ID ${booking.booking_id}, location: ${booking.location_name}. Backend cover_image_url: ${backendCoverUrl}`);
 
           if (backendCoverUrl && typeof backendCoverUrl === 'string' && backendCoverUrl.trim() !== '') {
             const trimmedBackendCoverUrl = backendCoverUrl.trim();
@@ -379,9 +381,9 @@ export default {
 
           return {
             ...booking,
-            location: { // Ensure location object exists even if original was minimal
-              ...(locationData || {}), // Spread original location fields, or empty object if no locationData
-              coverImage: finalCoverImageUrl // Override/set coverImage, will be null if no valid image
+            location: { 
+              ...(locationData || {}), 
+              coverImage: finalCoverImageUrl 
             }
           };
         });

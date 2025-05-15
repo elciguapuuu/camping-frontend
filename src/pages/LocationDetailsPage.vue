@@ -161,9 +161,9 @@
           </div>
         </div>
         
-        <!-- Add Review Form -->
+        <!-- Add/Edit Review Form -->
         <div v-if="isAuthenticated && userCanReview" class="add-review">
-          <h4>Leave a review</h4>
+          <h4>{{ isEditingReview ? 'Edit Your Review' : 'Leave a review' }}</h4>
           <form @submit.prevent="submitReview">
             <div class="rating-input">
               <label>Rating:</label>
@@ -182,30 +182,43 @@
               <textarea 
                 id="review-comment" 
                 v-model="newReview.comment"
-                placeholder="Share your experience about this place..."
+                :placeholder="isEditingReview ? 'Update your experience...' : 'Share your experience about this place...'"
                 rows="4"
               ></textarea>
             </div>
             <button type="submit" class="submit-review-btn" :disabled="isSubmittingReview">
-              {{ isSubmittingReview ? 'Submitting...' : 'Submit Review' }}
+              {{ isSubmittingReview ? (isEditingReview ? 'Updating...' : 'Submitting...') : (isEditingReview ? 'Update Review' : 'Submit Review') }}
+            </button>
+            <button 
+              type="button" 
+              v-if="isEditingReview" 
+              @click="cancelEditReview" 
+              class="cancel-review-btn"
+              :disabled="isSubmittingReview"
+              style="margin-left: 10px; background-color: #f44336; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;"
+            >
+              Cancel
             </button>
           </form>
         </div>
         
-        <div v-else-if="isAuthenticated && userHasReviewed" class="review-notice">
+        <!-- Notice: Already Reviewed (and not currently editing that review) -->
+        <div v-else-if="isAuthenticated && userHasReviewed && !isEditingReview" class="review-notice">
           <p>You have already reviewed this location.</p>
         </div>
         
-        <div v-else-if="isAuthenticated" class="review-notice">
-          <p>You need to have stayed at this location to leave a review.</p>
+        <!-- Notice: Cannot review (e.g., no completed booking, and not already reviewed) -->
+        <div v-else-if="isAuthenticated && !userHasReviewed" class="review-notice"> 
+          <p>You need to have stayed at this location and the booking must be completed to leave a review.</p>
         </div>
         
-        <div v-else class="review-notice">
+        <!-- Notice: Not Logged In -->
+        <div v-else-if="!isAuthenticated" class="review-notice">
           <p>Please <router-link to="/login">log in</router-link> to leave a review.</p>
         </div>
         
         <!-- Reviews List -->
-        <div v-if="reviews.length === 0" class="no-reviews">
+        <div v-if="reviews.length === 0 && !isLoading" class="no-reviews">
           <p>No reviews yet for this location.</p>
         </div>
         
@@ -223,6 +236,13 @@
             <div class="review-comment">
               {{ review.review_comment }}
             </div>
+            <button 
+              v-if="isAuthenticated && review.user_id === userId && !isEditingReview" 
+              @click="startEditReview(review)" 
+              class="edit-review-btn-inline action-btn btn-small"
+            >
+              Edit
+            </button>
           </div>
         </div>
       </div>
@@ -255,8 +275,8 @@ export default {
         longitude: 0,
         owner_id: null,
         owner_name: '',
-        average_rating: 0, // Added to store average_rating from location data
-        total_reviews: 0 // Added to store total_reviews from location data
+        average_rating: 0,
+        total_reviews: 0
       },
       images: [],
       currentImage: null,
@@ -269,8 +289,8 @@ export default {
         start: null,
         end: null,
       },
-      bookedDates: [], // To store dates that are already booked
-      calendarAttributes: [], // For v-calendar attributes like highlighting booked dates
+      bookedDates: [],
+      calendarAttributes: [],
       isAuthenticated: false,
       userId: null,
       userBookings: [],
@@ -282,6 +302,8 @@ export default {
         bookingId: null
       },
       isSubmittingReview: false,
+      isEditingReview: false, // To track if user is editing a review
+      editingReviewId: null, // To store the ID of the review being edited
     }
   },
   computed: {
@@ -303,6 +325,12 @@ export default {
     },
     reviewsCount() {
       return this.location.total_reviews ? parseInt(this.location.total_reviews) : 0;
+    },
+    userReview() {
+      if (!this.isAuthenticated || !this.reviews || this.reviews.length === 0) {
+        return null;
+      }
+      return this.reviews.find(review => review.user_id === this.userId);
     }
   },
   created() {
@@ -402,19 +430,16 @@ export default {
         
         if (reviewsResponse.data.reviews && reviewsResponse.data.reviews.length > 0) {
           this.reviews = reviewsResponse.data.reviews;
-          // this.reviewsCount = this.reviews.length; // No longer needed here
-          
-          // const totalRating = this.reviews.reduce((sum, review) => sum + review.overall_rating, 0); // No longer needed here
-          // this.averageRating = totalRating / this.reviews.length; // No longer needed here
-          
           if (this.isAuthenticated) {
             this.userHasReviewed = this.reviews.some(review => review.user_id === this.userId);
           }
         } else {
-          this.reviews = []; // Ensure reviews is an empty array if none are found
+          this.reviews = [];
+          this.userHasReviewed = false; 
         }
       } catch (error) {
         console.error('Error loading reviews:', error);
+        this.userHasReviewed = false; 
       }
     },
     
@@ -474,56 +499,77 @@ export default {
     async checkUserCanReview() {
       try {
         const token = localStorage.getItem('token');
-        const locationId = parseInt(this.$route.params.id); // Ensure locationId is a number for strict comparison
+        const locationId = parseInt(this.$route.params.id); 
+
+        // Ensure userHasReviewed is based on the latest reviews data
+        this.userHasReviewed = this.reviews.some(review => review.user_id === this.userId);
         
-        // Get user's bookings for this location
         const bookingsResponse = await axios.get(`http://localhost:3001/bookings/user/${this.userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        // Log all bookings for the user to help debug
-        console.log("User bookings:", bookingsResponse.data);
-
         const completedBookings = bookingsResponse.data.filter(booking => 
           booking.location_id === locationId && 
-          booking.status_id === 3  // Corrected: Assuming 3 is the ID for 'completed' bookings from seed.js
+          booking.status_id === 3  // Assuming 3 is 'completed'
         );
         
-        console.log("Completed bookings for this location:", completedBookings);
-        console.log("User has already reviewed this location:", this.userHasReviewed);
-
-        // User can review if they have at least one completed booking for this location AND haven't reviewed it yet
-        this.userCanReview = completedBookings.length > 0 && !this.userHasReviewed;
-        console.log("User can review status:", this.userCanReview);
+        if (this.isEditingReview) {
+          this.userCanReview = true;
+        } else {
+          this.userCanReview = completedBookings.length > 0 && !this.userHasReviewed;
+        }
         
-        if (this.userCanReview) {
-          // Find a completed booking that hasn't been reviewed yet.
-          // This logic assumes one review per booking_id as per backend.
-          // If multiple completed bookings exist, it will take the first one.
+        if (this.userCanReview && !this.isEditingReview) { 
           const suitableBooking = completedBookings.find(b => 
             !this.reviews.some(r => r.booking_id === b.booking_id)
           );
-
           if (suitableBooking) {
             this.newReview.bookingId = suitableBooking.booking_id;
-            console.log("Setting bookingId for review:", this.newReview.bookingId);
           } else {
-            // This case might occur if all completed bookings for this location already have a review
-            // (though the userHasReviewed flag should ideally catch this for the location overall).
-            this.userCanReview = false; 
-            console.log("No suitable booking found for review (all completed bookings might be reviewed).");
+            // This might happen if all completed bookings are reviewed,
+            // but userHasReviewed should catch this for the location overall.
+            // Or if there are completed bookings but somehow userHasReviewed is false,
+            // and no specific unreviewed booking is found.
+            // For safety, if no suitable booking_id is found for a NEW review, prevent showing the form.
+            if (!this.userHasReviewed) this.userCanReview = false;
           }
-          // this.userBookings = completedBookings; // We might not need to store all of them if only one review is allowed per location by a user.
-        } else if (completedBookings.length > 0 && this.userHasReviewed) {
-            console.log("User has completed bookings but has already reviewed this location.");
-        } else if (completedBookings.length === 0) {
-            console.log("User has no completed bookings for this location.");
         }
-
       } catch (error) {
         console.error('Error checking review eligibility:', error);
-        // Potentially set a user-facing message if needed
+        // Do not alter userCanReview here on error, let previous state persist or rely on defaults
       }
+    },
+
+    startEditReview(reviewToEdit) {
+      if (!reviewToEdit && this.userReview) { 
+        reviewToEdit = this.userReview;
+      }
+      if (reviewToEdit) {
+        this.isEditingReview = true;
+        this.editingReviewId = reviewToEdit.review_id;
+        this.newReview.rating = reviewToEdit.overall_rating;
+        this.newReview.comment = reviewToEdit.review_comment;
+        this.newReview.bookingId = reviewToEdit.booking_id; 
+        this.userCanReview = true; 
+        this.$nextTick(() => {
+          const reviewForm = document.querySelector('.add-review');
+          if (reviewForm) {
+            reviewForm.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+      } else {
+        console.error("Could not find the user's review to edit.");
+      }
+    },
+
+    cancelEditReview() {
+      this.isEditingReview = false;
+      this.editingReviewId = null;
+      this.newReview.rating = 0;
+      this.newReview.comment = '';
+      this.newReview.bookingId = null;
+      // Re-evaluate user's ability to post a new review or see "already reviewed" message
+      this.checkUserCanReview(); 
     },
     
     async submitReview() {
@@ -538,26 +584,35 @@ export default {
         const token = localStorage.getItem('token');
         const locationId = this.$route.params.id;
         
-        await axios.post('http://localhost:3001/reviews', {
-          location_id: locationId,
-          booking_id: this.newReview.bookingId, 
-          overall_rating: this.newReview.rating,
-          review_comment: this.newReview.comment
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        if (this.isEditingReview && this.editingReviewId) {
+          await axios.put(`http://localhost:3001/reviews/${this.editingReviewId}`, {
+            overall_rating: this.newReview.rating,
+            review_comment: this.newReview.comment
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } else {
+          await axios.post('http://localhost:3001/reviews', {
+            location_id: locationId,
+            booking_id: this.newReview.bookingId, 
+            overall_rating: this.newReview.rating,
+            review_comment: this.newReview.comment
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
         
-        // Reset form and reload reviews and location details to update average rating
         this.newReview.rating = 0;
         this.newReview.comment = '';
         this.newReview.bookingId = null;
-        await this.loadLocationDetails(); // This will reload reviews and update average/count
-        this.userHasReviewed = true; // Mark that user has now reviewed
-        this.userCanReview = false; // User cannot review again immediately
+        this.isEditingReview = false;
+        this.editingReviewId = null;
+        
+        await this.loadLocationDetails(); // This reloads reviews and re-checks eligibility
 
       } catch (error) {
-        console.error('Error submitting review:', error);
-        alert('Failed to submit review. ' + (error.response?.data?.error || 'Please try again.'));
+        console.error('Error submitting/updating review:', error);
+        alert('Failed to submit/update review. ' + (error.response?.data?.error || 'Please try again.'));
       } finally {
         this.isSubmittingReview = false;
       }
@@ -1093,5 +1148,21 @@ export default {
   height: 100%;
   color: #777;
   background-color: #f9f9f9;
+}
+
+.edit-review-btn-inline {
+  margin-top: 10px; /* Adds space above the button */
+  padding: 6px 12px; /* Adjust padding for a good size */
+  font-size: 0.875rem; /* Slightly smaller font */
+  background-color: #4CAF50; /* A pleasant green for edit actions */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.edit-review-btn-inline:hover {
+  background-color: #45a049; /* Darker green on hover */
 }
 </style>
