@@ -572,60 +572,60 @@ export default {
     },
     formatDate(dateString) {
       if (!dateString) return 'N/A';
-      const options = { year: 'numeric', month: 'long', day: 'numeric' }; // Defined options here
-      try {
-        return new Date(dateString).toLocaleDateString(undefined, options);
-      } catch (error) {
-        console.error("Error formatting date:", dateString, error);
-        return 'Invalid Date';
-      }
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      return new Date(dateString).toLocaleDateString(undefined, options);
     },
     formatPrice(price) {
-      if (price === null || price === undefined) return '0.00';
-      const numPrice = parseFloat(String(price));
+      const numPrice = parseFloat(price);
       return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2);
     },
     canCancelBooking(booking) {
+      // Only allow cancellation if the booking is 'confirmed' 
+      // and perhaps before a certain cut-off period (e.g., 24 hours before start_date)
+      // For now, let's keep it simple: only 'confirmed' bookings can be cancelled.
       return booking.status_name === 'confirmed';
     },
     promptCancelBooking(bookingId) {
-      const bookingToCancel = this.userBookings.find(b => b.booking_id === bookingId);
-      if (!bookingToCancel) return;
-
-      let confirmationMessage = "Are you sure you want to cancel this booking?";
-      // Ensure the confirm dialog is actually used
-      if (confirm(confirmationMessage)) {
+      if (confirm('Are you sure you want to cancel this booking? This action cannot be undone.')) {
         this.executeCancelBooking(bookingId);
       }
     },
     async executeCancelBooking(bookingId) {
+      if (!bookingId) {
+        this.errorMessage = 'Booking ID is missing. Cannot cancel.';
+        return;
+      }
       this.isCancelling = bookingId;
       this.errorMessage = '';
       this.successMessage = '';
       const token = localStorage.getItem('token');
+
       try {
+        // Assuming your backend endpoint is PUT /bookings/:bookingId/cancel
+        // Adjust if your endpoint is different (e.g., DELETE /bookings/:bookingId)
         await axios.put(`http://localhost:3001/bookings/${bookingId}/cancel`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
         this.successMessage = 'Booking cancelled successfully.';
-        // Refresh bookings to reflect the change
-        this.loadUserBookings(token);
+        // Refresh the bookings list to reflect the change
+        await this.fetchUserBookings(); 
       } catch (error) {
-        this.errorMessage = error.response?.data?.error || 'Failed to cancel booking.';
+        console.error('Error cancelling booking:', error);
+        this.errorMessage = error.response?.data?.error || 'Failed to cancel booking. Please try again.';
       } finally {
         this.isCancelling = null;
       }
     },
     viewBookingDetails(bookingId) {
-      // Navigate to a booking detail page or show a modal
+      // Navigate to a detailed booking view if you have one, or show a modal
+      // For now, let's assume navigation to a route like /booking/:id
+      // You might need to implement this route and page
+      this.$router.push(`/booking/${bookingId}`);
       console.log('View details for booking ID:', bookingId);
-      // Example: this.$router.push({ name: 'BookingDetails', params: { bookingId } });
-      // For now, just a log. Implement navigation or modal display as needed.
     }
   },
   created() {
-    this.loadUserProfile();
-    // loadUserBookings is called at the end of loadUserProfile
+    this.loadUserProfile(); // loadUserBookings is called at the end of loadUserProfile
   },
 };
 </script>

@@ -37,8 +37,8 @@
           <p class="location-address">{{ location.address }}</p>
           
         </div>
-        <div class="location-rating" v-if="averageRating">
-          <div class="stars">★ {{ averageRating.toFixed(1) }}</div>
+        <div class="location-rating" v-if="displayOverallRating">
+          <div class="stars">★ {{ displayOverallRating }}</div>
           <div class="reviews-count">({{ reviewsCount }} reviews)</div>
         </div>
       </div>
@@ -87,10 +87,6 @@
           <div class="booking-card-content">
             <div class="booking-price">
               <span class="price-amount">€{{ location.price_per_night }}</span> night
-            </div>
-            <div class="booking-rating" v-if="averageRating">
-              <span class="stars">★ {{ averageRating.toFixed(1) }}</span>
-              <span class="reviews-count">{{ reviewsCount }} reviews</span>
             </div>
             
             <div class="booking-dates">
@@ -153,12 +149,6 @@
       <div class="reviews-section">
         <div class="reviews-header">
           <h3>Reviews</h3>
-          <div class="rating-summary" v-if="averageRating">
-            <div class="average-rating">
-              <span class="stars">★ {{ averageRating.toFixed(1) }}</span>
-              <span class="reviews-count">{{ reviewsCount }} reviews</span>
-            </div>
-          </div>
         </div>
         
         <!-- Add/Edit Review Form -->
@@ -324,7 +314,20 @@ export default {
       return this.location.average_rating ? parseFloat(this.location.average_rating) : 0;
     },
     reviewsCount() {
-      return this.location.total_reviews ? parseInt(this.location.total_reviews) : 0;
+      // Use the length of the loaded reviews array for an accurate count
+      return this.reviews ? this.reviews.length : 0;
+    },
+    displayOverallRating() {
+      // Ensure reviews are loaded and the array is not empty
+      if (this.reviews && this.reviews.length > 0) {
+        const firstReview = this.reviews[0];
+        // Check if the first review exists and has a valid 'overall_rating'
+        if (firstReview && typeof firstReview.overall_rating === 'number' &&
+            firstReview.overall_rating >= 1 && firstReview.overall_rating <= 5) {
+          return firstReview.overall_rating; // Return the integer rating
+        }
+      }
+      return null; // Return null if no valid rating can be determined
     },
     userReview() {
       if (!this.isAuthenticated || !this.reviews || this.reviews.length === 0) {
@@ -859,10 +862,6 @@ export default {
 .price-amount {
   font-size: 1.5rem;
   font-weight: bold;
-}
-
-.booking-rating {
-  margin-bottom: 20px;
 }
 
 .booking-dates {

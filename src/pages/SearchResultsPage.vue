@@ -134,9 +134,14 @@
             <div class="location-info">
               <div class="location-header">
                 <h3>{{ location.name }}</h3>
-                <div class="location-rating" v-if="location.averageRating">
-                  <span class="stars">{{ '★'.repeat(Math.round(location.averageRating)) }}</span>
-                  <span class="rating-value">({{ location.averageRating.toFixed(1) }})</span>
+                <div class="location-rating">
+                  <template v-if="location.reviewsCount && location.reviewsCount > 0">
+                    <span v-if="typeof location.firstReviewRating === 'number'" class="stars">★ {{ location.firstReviewRating.toFixed(1) }}</span>
+                    <span class="reviews-count-display"> ({{ location.reviewsCount }} {{ location.reviewsCount === 1 ? 'review' : 'reviews' }})</span>
+                  </template>
+                  <template v-else>
+                    <span class="no-reviews-text">No reviews yet</span>
+                  </template>
                 </div>
               </div>
               <p class="location-area">{{ location.city }}, {{ location.country }}</p>
@@ -535,16 +540,63 @@ export default {
             this.$set(location, 'amenities', []);
           }
           
-          // Get average rating
+          // Get average rating (still needed for filtering)
           const ratingsResponse = await axios.get(
             `http://localhost:3001/locations/${location.location_id}/reviews/average`
           );
           
           if (ratingsResponse.data && ratingsResponse.data.averageRating) {
-            this.$set(location, 'averageRating', ratingsResponse.data.averageRating);
+            this.$set(location, 'averageRating', parseFloat(ratingsResponse.data.averageRating));
+          } else {
+            this.$set(location, 'averageRating', 0); 
           }
+
+          // Initialize review-related properties before attempting to fetch for robustness
+          this.$set(location, 'firstReviewRating', null);
+          this.$set(location, 'reviewsCount', 0);
+          this.$set(location, 'allReviews', []);
+
+          // Fetch all reviews for display (first review rating and actual count)
+          try {
+            const reviewsDataResponse = await axios.get(`http://localhost:3001/reviews/${location.location_id}`);
+            if (reviewsDataResponse.data && Array.isArray(reviewsDataResponse.data.reviews) && reviewsDataResponse.data.reviews.length > 0) {
+              const reviews = reviewsDataResponse.data.reviews;
+              this.$set(location, 'allReviews', reviews); // Store all reviews
+              this.$set(location, 'reviewsCount', reviews.length); // Set actual count
+
+              const firstReview = reviews[0];
+              let ratingValue = null;
+              if (firstReview && typeof firstReview.overall_rating !== 'undefined' && firstReview.overall_rating !== null) {
+                const parsedRating = parseFloat(firstReview.overall_rating);
+                if (!isNaN(parsedRating) && parsedRating >= 1 && parsedRating <= 5) {
+                  ratingValue = parsedRating;
+                }
+              }
+              this.$set(location, 'firstReviewRating', ratingValue); // Set rating (or null if invalid)
+            } else {
+              // No reviews found or malformed data, properties remain as initialized (0/null/[])
+              // console.log(`Location ${location.location_id} reported no reviews or malformed review data from API.`);
+            }
+          } catch (reviewError) {
+            if (reviewError.response && reviewError.response.status === 404) {
+              // If 404, assume no reviews for this location, properties remain as initialized (0/null/[])
+              console.log(`No reviews found for location ${location.location_id} (API returned 404).`);
+            } else {
+              // For other errors, log them as before, properties remain as initialized (0/null/[])
+              console.error(`Error loading full reviews for location ${location.location_id}:`, reviewError);
+            }
+            // Fallback properties are already set by initialization before this try-catch block
+          }
+
         } catch (error) {
           console.error(`Error loading data for location ${location.location_id}:`, error);
+          // Ensure display properties are initialized if main try fails before review fetch
+          if (typeof location.firstReviewRating === 'undefined') {
+            this.$set(location, 'firstReviewRating', null);
+          }
+          if (typeof location.reviewsCount === 'undefined') {
+            this.$set(location, 'reviewsCount', 0);
+          }
         }
       }));
     },
@@ -595,7 +647,11 @@ export default {
         
         // Rating filter
         if (this.selectedRating > 0) {
-          if (!location.averageRating || location.averageRating < this.selectedRating) {
+          // A location is filtered out if:
+          // 1. It does not have a numeric firstReviewRating (e.g., null due to no reviews or invalid data)
+          // 2. Its firstReviewRating is less than the selectedRating threshold.
+          //    (e.g., if selectedRating is 3, locations with firstReviewRating < 3 are filtered out)
+          if (typeof location.firstReviewRating !== 'number' || location.firstReviewRating < this.selectedRating) {
             return false;
           }
         }
@@ -633,7 +689,7 @@ export default {
     },
     
     setRating(rating) {
-      this.selectedRating = this.selectedRating === rating ? rating - 1 : rating;
+      this.selectedRating = rating;
       this.applyFilters();
     },
     
@@ -861,9 +917,16 @@ export default {
   margin-right: 8px;
 }
 
-.star {
+.star-rating .star {
   cursor: pointer;
   font-size: 24px;
+  color: #ccc; /* Default color for inactive stars */
+  transition: color 0.2s ease-in-out;
+}
+
+.star-rating .star.active,
+.star-rating .star:hover {
+  color: #ffc107; /* Yellow/gold color for active or hovered stars */
 }
 
 .filter-btn, .reset-btn {
