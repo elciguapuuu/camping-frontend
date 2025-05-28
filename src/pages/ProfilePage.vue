@@ -183,6 +183,7 @@
                   <h4 class="booking-location-name" :title="booking.location_name">{{ booking.location_name || 'N/A' }}</h4>
                   <p class="booking-dates">Dates: {{ formatDate(booking.start_date) }} - {{ formatDate(booking.end_date) }}</p>
                    <p class="booking-status">Status: <span :class="`status-${booking.status_name}`">{{ booking.status_name }}</span></p>
+                  <button @click="viewLocationDetails(booking.location_id)" class="btn btn-small btn-info-outline">View Location</button>
                 </div>
               </div>
             </div>
@@ -622,6 +623,9 @@ export default {
       // You might need to implement this route and page
       this.$router.push(`/booking/${bookingId}`);
       console.log('View details for booking ID:', bookingId);
+    },
+    viewLocationDetails(locationId) {
+      this.$router.push({ name: 'LocationDetailsPage', params: { id: locationId } });
     }
   },
   created() {

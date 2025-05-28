@@ -777,7 +777,7 @@ export default {
 }
 
 .stars {
-  color: #42b983;
+  color: green; /* Changed to green */
   font-weight: bold;
 }
 
@@ -1093,7 +1093,7 @@ export default {
 }
 
 .review-rating {
-  color: #ffc107;
+  color: green; /* Changed to green */
   font-weight: bold;
 }
 

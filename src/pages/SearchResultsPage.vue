@@ -45,6 +45,7 @@
               :max="minMaxPrice.max"
               step="10"
               class="price-slider"
+              @input="applyFilters"
             >
             <div class="price-range-labels">
               <span>€{{ minMaxPrice.min }}</span>
@@ -94,11 +95,10 @@
               :class="{ active: n <= selectedRating }"
               @click="setRating(n)"
             >★</span>
-            <span v-if="selectedRating > 0" class="clear-rating" @click="selectedRating = 0">Clear</span>
+            <span v-if="selectedRating > 0" class="clear-rating" @click="selectedRating = 0; applyFilters();">Clear</span>
           </div>
         </div>
         
-        <button @click="applyFilters" class="filter-btn">Apply Filters</button>
         <button @click="resetFilters" class="reset-btn">Reset All</button>
       </div>
       
@@ -135,8 +135,12 @@
               <div class="location-header">
                 <h3>{{ location.name }}</h3>
                 <div class="location-rating">
-                  <template v-if="location.reviewsCount && location.reviewsCount > 0">
-                    <span v-if="typeof location.firstReviewRating === 'number'" class="stars">★ {{ location.firstReviewRating.toFixed(1) }}</span>
+                  <template v-if="location.reviewsCount && location.reviewsCount > 0 && typeof location.averageRating === 'number'">
+                    <span class="stars">★ {{ location.averageRating.toFixed(1) }}</span>
+                    <span class="reviews-count-display"> ({{ location.reviewsCount }} {{ location.reviewsCount === 1 ? 'review' : 'reviews' }})</span>
+                  </template>
+                  <template v-else-if="location.reviewsCount && location.reviewsCount > 0">
+                    <!-- Fallback or alternative display if averageRating is not a number but reviews exist -->
                     <span class="reviews-count-display"> ({{ location.reviewsCount }} {{ location.reviewsCount === 1 ? 'review' : 'reviews' }})</span>
                   </template>
                   <template v-else>
@@ -540,59 +544,32 @@ export default {
             this.$set(location, 'amenities', []);
           }
           
-          // Get average rating (still needed for filtering)
+          // Get average rating (still needed for filtering AND DISPLAY)
           const ratingsResponse = await axios.get(
-            `http://localhost:3001/locations/${location.location_id}/reviews/average`
+            `http://localhost:3001/reviews/${location.location_id}/average`
           );
           
-          if (ratingsResponse.data && ratingsResponse.data.averageRating) {
+          if (ratingsResponse.data && typeof ratingsResponse.data.averageRating === 'number') {
             this.$set(location, 'averageRating', parseFloat(ratingsResponse.data.averageRating));
+            this.$set(location, 'reviewsCount', parseInt(ratingsResponse.data.reviewCount) || 0); // Use reviewCount from average endpoint
           } else {
             this.$set(location, 'averageRating', 0); 
+            this.$set(location, 'reviewsCount', 0); 
           }
 
-          // Initialize review-related properties before attempting to fetch for robustness
-          this.$set(location, 'firstReviewRating', null);
-          this.$set(location, 'reviewsCount', 0);
-          this.$set(location, 'allReviews', []);
+          // Remove fetching all reviews just for count and first review rating, use average endpoint data
+          // this.$set(location, 'firstReviewRating', null); // No longer primarily used for display rating
+          // this.$set(location, 'allReviews', []); // Still can be fetched if needed for other purposes on demand
 
-          // Fetch all reviews for display (first review rating and actual count)
-          try {
-            const reviewsDataResponse = await axios.get(`http://localhost:3001/reviews/${location.location_id}`);
-            if (reviewsDataResponse.data && Array.isArray(reviewsDataResponse.data.reviews) && reviewsDataResponse.data.reviews.length > 0) {
-              const reviews = reviewsDataResponse.data.reviews;
-              this.$set(location, 'allReviews', reviews); // Store all reviews
-              this.$set(location, 'reviewsCount', reviews.length); // Set actual count
-
-              const firstReview = reviews[0];
-              let ratingValue = null;
-              if (firstReview && typeof firstReview.overall_rating !== 'undefined' && firstReview.overall_rating !== null) {
-                const parsedRating = parseFloat(firstReview.overall_rating);
-                if (!isNaN(parsedRating) && parsedRating >= 1 && parsedRating <= 5) {
-                  ratingValue = parsedRating;
-                }
-              }
-              this.$set(location, 'firstReviewRating', ratingValue); // Set rating (or null if invalid)
-            } else {
-              // No reviews found or malformed data, properties remain as initialized (0/null/[])
-              // console.log(`Location ${location.location_id} reported no reviews or malformed review data from API.`);
-            }
-          } catch (reviewError) {
-            if (reviewError.response && reviewError.response.status === 404) {
-              // If 404, assume no reviews for this location, properties remain as initialized (0/null/[])
-              console.log(`No reviews found for location ${location.location_id} (API returned 404).`);
-            } else {
-              // For other errors, log them as before, properties remain as initialized (0/null/[])
-              console.error(`Error loading full reviews for location ${location.location_id}:`, reviewError);
-            }
-            // Fallback properties are already set by initialization before this try-catch block
-          }
+          // The block for fetching all reviews from `http://localhost:3001/reviews/${location.location_id}`
+          // can be removed or modified if `allReviews` are not needed for other display purposes on this card.
+          // For now, we'll assume the averageRating and reviewsCount from the /average endpoint are sufficient for the card.
 
         } catch (error) {
           console.error(`Error loading data for location ${location.location_id}:`, error);
-          // Ensure display properties are initialized if main try fails before review fetch
-          if (typeof location.firstReviewRating === 'undefined') {
-            this.$set(location, 'firstReviewRating', null);
+          // Ensure display properties are initialized if main try fails
+          if (typeof location.averageRating === 'undefined') {
+            this.$set(location, 'averageRating', 0);
           }
           if (typeof location.reviewsCount === 'undefined') {
             this.$set(location, 'reviewsCount', 0);
@@ -645,13 +622,9 @@ export default {
           }
         }
         
-        // Rating filter
+        // Rating filter (uses averageRating)
         if (this.selectedRating > 0) {
-          // A location is filtered out if:
-          // 1. It does not have a numeric firstReviewRating (e.g., null due to no reviews or invalid data)
-          // 2. Its firstReviewRating is less than the selectedRating threshold.
-          //    (e.g., if selectedRating is 3, locations with firstReviewRating < 3 are filtered out)
-          if (typeof location.firstReviewRating !== 'number' || location.firstReviewRating < this.selectedRating) {
+          if (typeof location.averageRating !== 'number' || location.averageRating < this.selectedRating) {
             return false;
           }
         }
@@ -697,8 +670,8 @@ export default {
       this.selectedCampsiteTypes = [];
       this.selectedAmenities = [];
       this.selectedRating = 0;
-      this.maxPriceFilter = this.minMaxPrice.max;
-      this.filteredResults = [...this.results];
+      this.maxPriceFilter = this.minMaxPrice.max; // Reset to max
+      this.applyFilters(); // Apply filters after resetting
     },
     
     bookLocation(location) {
@@ -926,7 +899,19 @@ export default {
 
 .star-rating .star.active,
 .star-rating .star:hover {
-  color: #ffc107; /* Yellow/gold color for active or hovered stars */
+  color: green; /* Ensures stars in main filter are green */
+}
+
+/* Targeting stars specifically within the map modal's filter UI */
+.map-filters-ui .star-rating .star.active,
+.map-filters-ui .star-rating .star:hover {
+  color: green; /* Ensures stars in map filter are green */
+}
+
+/* Ensure the star display on the location card itself is also green if that's intended */
+.location-rating .stars {
+  color: green; /* Or ensure this class is targeted if different from filter stars */
+  /* If the ★ character is directly in a span with class .stars, this will color it. */
 }
 
 .filter-btn, .reset-btn {
