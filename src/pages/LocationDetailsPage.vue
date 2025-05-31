@@ -98,6 +98,7 @@
                 :masks="{ input: 'YYYY-MM-DD' }" 
                 class="date-picker-full-width"
                 :attributes="calendarAttributes"
+                :disabled-dates="allDisabledDatesForCalendar" 
                 @dayclick="onDayClick"
               >
                 <template v-slot="{ inputValue, inputEvents, isDragging }">
@@ -280,6 +281,7 @@ export default {
         end: null,
       },
       bookedDates: [],
+      ownerUnavailabilities: [], // New data property for owner-set unavailabilities
       calendarAttributes: [],
       isAuthenticated: false,
       userId: null,
@@ -334,6 +336,17 @@ export default {
         return null;
       }
       return this.reviews.find(review => review.user_id === this.userId);
+    },
+    allDisabledDatesForCalendar() {
+      // Combine booked dates and owner unavailabilities for the v-calendar disabled-dates prop
+      const disabledRanges = [];
+      this.bookedDates.forEach(range => {
+        disabledRanges.push({ start: range.start, end: range.end });
+      });
+      this.ownerUnavailabilities.forEach(range => {
+        disabledRanges.push({ start: range.start, end: range.end });
+      });
+      return disabledRanges;
     }
   },
   created() {
@@ -410,6 +423,9 @@ export default {
         // Load booked dates for this location
         await this.loadBookedDates(locationId);
         
+        // Load owner-set unavailabilities for this location
+        await this.loadOwnerUnavailabilities(locationId); // Added call
+        
         // Check if user can review
         if (this.isAuthenticated) {
           console.log('[LocationDetailsPage] Checking if user can review...');
@@ -453,43 +469,73 @@ export default {
           start: new Date(dateRange.start_date),
           end: new Date(dateRange.end_date),
         }));
-        this.prepareCalendarAttributes();
+        // We will call prepareCalendarAttributes once both bookedDates and ownerUnavailabilities are loaded
+        // this.prepareCalendarAttributes(); // Removed from here
       } catch (error) {
         console.error('Error loading booked dates:', error);
-        // Handle error appropriately, maybe set a message
+      }
+    },
+
+    async loadOwnerUnavailabilities(locationId) {
+      try {
+        const response = await axios.get(`http://localhost:3001/locations/${locationId}/unavailability`);
+        this.ownerUnavailabilities = response.data.map(item => ({
+          start: new Date(item.start_date),
+          end: new Date(item.end_date),
+          reason: item.reason, // Keep reason if needed for popover
+        }));
+        this.prepareCalendarAttributes(); // Call after both booked and unavailable dates are loaded
+      } catch (error) {
+        console.error('Error loading owner unavailabilities:', error);
       }
     },
 
     prepareCalendarAttributes() {
       const attributes = [];
-      // Add highlights for booked dates
+      
+      // Add highlights and popovers for booked dates
       this.bookedDates.forEach((range, index) => {
         attributes.push({
           key: `booked-${index}`,
           highlight: {
-            color: 'red',
+            color: 'red', // Or your preferred color for bookings
             fillMode: 'light',
           },
-          dates: range, // v-calendar can take { start, end } objects directly
+          dates: range,
           popover: {
-            label: 'This period is booked.',
+            label: 'Booked by a user.',
             visibility: 'hover',
-          }
+          },
+          // Custom property to mark as disabled for selection logic if needed by v-calendar directly
+          // or to be combined into a single disabledDates array.
+          // For v-calendar, explicitly disabling dates is often done by passing an array of dates/ranges
+          // to a specific prop like `disabled-dates`.
         });
       });
 
-      // Disable booked dates for selection
-      // This creates an array of { start, end } objects for disabled dates
-      attributes.push({
-        key: 'disabled-dates',
-        dates: this.bookedDates, // Pass the array of booked date ranges
-        disabled: true, // This is a custom prop, v-calendar uses `disabledDates` or `availableDates`
-                       // For v-calendar v2, you might need to use :disabled-dates="disabledDatesArray"
-                       // or more complex logic with `selectAttribute` or `dragAttribute`
-                       // For now, we'll rely on visual cues and server-side validation.
-                       // A more robust solution would involve generating a list of individual disabled dates
-                       // or using `available-dates` if the API supports it.
+      // Add highlights and popovers for owner-set unavailable dates
+      this.ownerUnavailabilities.forEach((range, index) => {
+        attributes.push({
+          key: `unavailable-${index}`,
+          highlight: {
+            // Different style for owner unavailable dates
+            color: 'gray', 
+            fillMode: 'light',
+            // Example of using a pattern
+            // class: 'unavailable-pattern-bg', // You'd need to define this CSS class
+          },
+          dates: range,
+          popover: {
+            label: range.reason ? `Unavailable: ${range.reason}` : 'Marked as unavailable by owner.',
+            visibility: 'hover',
+          },
+        });
       });
+
+      // The `allDisabledDatesForCalendar` computed property now handles the combination of
+      // booked dates and owner unavailabilities for the v-calendar's :disabled-dates prop.
+      // The `attributes` array is primarily for visual styling (highlights, popovers).
+
       this.calendarAttributes = attributes;
     },
 
@@ -899,44 +945,25 @@ export default {
 .date-picker-input-container {
   display: flex;
   align-items: center;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 0px 0px;
-  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.5em;
 }
 
 .date-picker-input-field {
-  flex: 1;
-  padding: 10px 12px;
-  border: none; /* Remove individual borders as container has one */
-  font-size: 0.95rem;
-  background: transparent;
-  width: 100%; /* Ensure it fills flex item */
-  box-sizing: border-box;
+  border: none;
+  padding: 0.5em;
+  text-align: center;
+  flex-grow: 1;
+  width: 100px; /* Adjust as needed */
 }
 
 .date-picker-input-field:focus {
   outline: none;
 }
 
-.date-picker-input-container input:first-child {
-  border-right: 1px solid #ddd; /* Separator line */
-  border-top-left-radius: 8px;
-  border-bottom-left-radius: 8px;
-}
-.date-picker-input-container input:last-child {
-  border-top-right-radius: 8px;
-  border-bottom-right-radius: 8px;
-}
-
-
 .date-separator {
-  padding: 0 0px;
-  color: #888;
-  background-color: #fff; /* Match input background */
-  height: 100%;
-  display: flex;
-  align-items: center;
+  margin: 0 0.5em;
 }
 
 .is-dragging {
@@ -1164,4 +1191,17 @@ export default {
 .edit-review-btn-inline:hover {
   background-color: #45a049; /* Darker green on hover */
 }
+
+/* Optional: Add a class for owner unavailable dates if using a pattern */
+/*
+.unavailable-pattern-bg {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(0, 0, 0, 0.1),
+    rgba(0, 0, 0, 0.1) 10px,
+    rgba(0, 0, 0, 0.2) 10px,
+    rgba(0, 0, 0, 0.2) 20px
+  );
+}
+*/
 </style>
