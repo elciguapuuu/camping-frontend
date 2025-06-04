@@ -62,7 +62,128 @@
             <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
               <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
             </div>
+
+            <p class="location-rating">
+              <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
+                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
+                <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
+              </template>
+              <template v-else>
+                <span class="no-reviews-text">No reviews yet</span>
+              </template>
+            </p>
             
+            <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-rated-locations container" v-if="topRatedLocations.length > 0">
+      <h2>Top Rated Camping Spots</h2>
+      <div class="locations-grid">
+        <div v-for="location in topRatedLocations" :key="location.location_id" class="location-card">
+          <div class="location-image">
+            <img 
+              v-if="location.coverImage" 
+              :src="location.coverImage" 
+              :alt="location.name"
+              class="location-image"
+            />
+            <div v-else class="location-image-placeholder">
+              <span>No image available</span>
+            </div>
+          </div>
+          <div class="location-info">
+            <h3>{{ location.name }}</h3>
+            <p class="location-area">{{ location.city }}, {{ location.country }}</p>
+            <p class="location-price">€{{ location.price_per_night }} per night</p>
+            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
+              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
+            </div>
+            <p class="location-rating">
+              <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
+                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
+                <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
+              </template>
+              <template v-else>
+                <span class="no-reviews-text">No reviews yet</span>
+              </template>
+            </p>
+            <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="recently-added-locations container" v-if="recentlyAddedLocations.length > 0">
+      <h2>Recently Added Camping Spots</h2>
+      <div class="locations-grid">
+        <div v-for="location in recentlyAddedLocations" :key="location.location_id" class="location-card">
+          <div class="location-image">
+            <img 
+              v-if="location.coverImage" 
+              :src="location.coverImage" 
+              :alt="location.name"
+              class="location-image"
+            />
+            <div v-else class="location-image-placeholder">
+              <span>No image available</span>
+            </div>
+          </div>
+          <div class="location-info">
+            <h3>{{ location.name }}</h3>
+            <p class="location-area">{{ location.city }}, {{ location.country }}</p>
+            <p class="location-price">€{{ location.price_per_night }} per night</p>
+            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
+              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
+            </div>
+            <p class="location-rating">
+              <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
+                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
+                <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
+              </template>
+              <template v-else>
+                <span class="no-reviews-text">No reviews yet</span>
+              </template>
+            </p>
+            <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="unique-experiences container" v-if="uniqueExperiences.length > 0">
+      <h2>Unique Camping Experiences</h2>
+      <div class="locations-grid">
+        <div v-for="location in uniqueExperiences" :key="location.location_id" class="location-card">
+          <div class="location-image">
+            <img 
+              v-if="location.coverImage" 
+              :src="location.coverImage" 
+              :alt="location.name"
+              class="location-image"
+            />
+            <div v-else class="location-image-placeholder">
+              <span>No image available</span>
+            </div>
+          </div>
+          <div class="location-info">
+            <h3>{{ location.name }}</h3>
+            <p class="location-area">{{ location.city }}, {{ location.country }}</p>
+            <p class="location-price">€{{ location.price_per_night }} per night</p>
+            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
+              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
+            </div>
+            <p class="location-rating">
+              <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
+                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
+                <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
+              </template>
+              <template v-else>
+                <span class="no-reviews-text">No reviews yet</span>
+              </template>
+            </p>
             <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
           </div>
         </div>
@@ -92,6 +213,9 @@ export default {
         end: null,
       },
       featuredLocations: [],
+      topRatedLocations: [],
+      recentlyAddedLocations: [],
+      uniqueExperiences: [],
       // allLocations: [], // Removed
       // mapLocations: [], // Removed
       // filters: { // Removed
@@ -113,6 +237,9 @@ export default {
   created() {
     this.checkAuth();
     this.loadFeaturedLocations();
+    this.loadTopRatedLocations();
+    this.loadRecentlyAddedLocations();
+    this.loadUniqueExperiences();
     // this.loadAllLocationsForMap(); // Removed
     // this.loadFilterData(); // Removed
   },
@@ -131,10 +258,37 @@ export default {
           console.error('Error loading featured locations:', error);
         });
     },
+    async loadTopRatedLocations() {
+      try {
+        const response = await axios.get('http://localhost:3001/locations?sort=average_rating&order=desc&limit=6');
+        this.topRatedLocations = response.data.filter(location => !this.featuredLocations.some(featured => featured.location_id === location.location_id));
+        await this.loadSubDetailsForLocations(this.topRatedLocations);
+      } catch (error) {
+        console.error('Error loading top-rated locations:', error);
+      }
+    },
+    async loadRecentlyAddedLocations() {
+      try {
+        const response = await axios.get('http://localhost:3001/locations?sort=date_added&order=desc&limit=6');
+        this.recentlyAddedLocations = response.data.filter(location => !this.featuredLocations.some(featured => featured.location_id === location.location_id));
+        await this.loadSubDetailsForLocations(this.recentlyAddedLocations);
+      } catch (error) {
+        console.error('Error loading recently added locations:', error);
+      }
+    },
+    async loadUniqueExperiences() {
+      try {
+        const response = await axios.get('http://localhost:3001/locations?filter=unique&limit=6');
+        this.uniqueExperiences = response.data.filter(location => !this.featuredLocations.some(featured => featured.location_id === location.location_id));
+        await this.loadSubDetailsForLocations(this.uniqueExperiences);
+      } catch (error) {
+        console.error('Error loading unique experiences:', error);
+      }
+    },
     // loadAllLocationsForMap() { // Removed
     //   ...
     // },
-    async loadSubDetailsForLocations(locations) { // Removed updateMapLocationsList parameter
+    async loadSubDetailsForLocations(locations) {
       for (const location of locations) {
         try {
           const imageResponse = await axios.get(
@@ -152,34 +306,23 @@ export default {
             this.$set(location, 'campsiteTypes', typesResponse.data);
           }
 
-          const amenitiesResponse = await axios.get(
-            `http://localhost:3001/locations/${location.location_id}/amenities`
+          const ratingsResponse = await axios.get(
+            `http://localhost:3001/reviews/${location.location_id}/average`
           );
-          if (amenitiesResponse.data && amenitiesResponse.data.length > 0) {
-            this.$set(location, 'amenities', amenitiesResponse.data);
-          }
-          
-          try {
-            const reviewsResponse = await axios.get(`http://localhost:3001/locations/${location.location_id}/reviews`);
-            if (reviewsResponse.data && reviewsResponse.data.length > 0) {
-              const totalRating = reviewsResponse.data.reduce((acc, review) => acc + review.rating, 0);
-              this.$set(location, 'average_rating', totalRating / reviewsResponse.data.length);
-              this.$set(location, 'review_count', reviewsResponse.data.length);
-            } else {
-              this.$set(location, 'average_rating', 0);
-              this.$set(location, 'review_count', 0);
-            }
-          } catch (reviewsError) {
-            console.error(`Error loading reviews for ${location.name}:`, reviewsError);
+          if (ratingsResponse.data && typeof ratingsResponse.data.averageRating === 'number') {
+            this.$set(location, 'average_rating', parseFloat(ratingsResponse.data.averageRating));
+            this.$set(location, 'review_count', parseInt(ratingsResponse.data.reviewCount) || 0);
+          } else {
             this.$set(location, 'average_rating', 0);
             this.$set(location, 'review_count', 0);
           }
 
         } catch (error) {
           console.error(`Error loading sub-details for ${location.name}:`, error);
+          this.$set(location, 'average_rating', 0);
+          this.$set(location, 'review_count', 0);
         }
       }
-      // Removed logic related to updateMapLocationsList
     },
     // loadFilterData() { // Removed
     //   ...
@@ -396,6 +539,26 @@ export default {
   font-size: 0.9rem;
   border-top: 1px solid #eee;
   padding-top: 10px;
+}
+
+.location-rating {
+  margin-top: 5px;
+  font-size: 1.1rem; /* Increase font size */
+  color: #27ae60; /* Green color for ratings */
+  font-weight: bold; /* Make it bold to grab attention */
+}
+
+.stars {
+  color: #27ae60; /* Green color for stars */
+}
+
+.reviews-count-display {
+  margin-left: 5px;
+}
+
+.no-reviews-text {
+  color: #999;
+  font-weight: bold; /* Make "No reviews yet" bold */
 }
 
 .view-details {

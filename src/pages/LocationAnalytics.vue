@@ -94,16 +94,16 @@
           </div>
           <div class="metric-item metric-text-display">
             <h3>Average Length of Stay</h3>
-            <p class="metric-value"><strong>{{ averageLengthOfStayInMonth.toFixed(1) }} nights</strong></p>
+            <p class="metric-value"><strong>{{ Math.round(averageLengthOfStayInMonth) }} nights</strong></p>
           </div>
 
-          <div class="metric-item chart-container-metric">
+          <div class="metric-item metric-text-display">
             <h3>Total Revenue</h3>
-            <column-chart :data="totalRevenueChartData" :library="metricChartOptions" ytitle="Revenue ($)" height="150px"></column-chart>
+            <p class="metric-value"><strong>${{ totalRevenueInMonth.toFixed(2) }}</strong></p>
           </div>
-          <div class="metric-item chart-container-metric">
+          <div class="metric-item metric-text-display">
             <h3>Average Daily Rate (ADR)</h3>
-            <column-chart :data="averageDailyRateChartData" :library="metricChartOptions" ytitle="ADR ($)" height="150px"></column-chart>
+            <p class="metric-value"><strong>${{ averageDailyRateInMonth.toFixed(2) }}</strong></p>
           </div>
           
           <div class="metric-item chart-container-metric">
@@ -843,18 +843,17 @@ export default {
 }
 
 .back-button {
-  background-color: #6c757d;
+  background-color: #27ae60;
   color: white;
   border: none;
-  padding: 8px 15px;
+  padding: 10px 20px;
   border-radius: 5px;
-  cursor: pointer;
-  font-size: 0.9em;
-  margin-bottom: 20px;
-  transition: background-color 0.2s ease;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
 }
 .back-button:hover {
-  background-color: #5a6268;
+  background-color: #1e8e50;
 }
 
 h1, h2, h3 {

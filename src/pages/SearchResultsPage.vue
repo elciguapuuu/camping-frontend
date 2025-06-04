@@ -925,6 +925,21 @@ export default {
   background-color: #f7f7f7;
 }
 
+.reset-btn {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.reset-btn:hover {
+  background-color: #1e8e50;
+}
+
 .results-section {
   flex-grow: 1;
 }
