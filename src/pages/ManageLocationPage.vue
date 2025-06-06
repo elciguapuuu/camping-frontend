@@ -283,8 +283,8 @@
               <p class="location-fee"><strong>Service Fee:</strong> {{ location.service_fee_percentage !== undefined ? location.service_fee_percentage.toFixed(2) : 'N/A' }}%</p>
               <p class="location-policy"><strong>Policy:</strong> {{ location.booking_policy ? (location.booking_policy.substring(0, 50) + '...') : 'Not set' }}</p>
               <div class="location-rating-summary" v-if="location.total_reviews > 0">
-                <span class="stars">★ {{ parseFloat(location.average_rating).toFixed(1) }}</span>
-                <span class="reviews-count">({{ location.total_reviews }} reviews)</span>
+                <span class="stars">★ {{ Math.round(location.average_rating) }}</span>
+                <span class="reviews-count-display"> ({{ location.total_reviews }} {{ location.total_reviews === 1 ? 'review' : 'reviews' }})</span>
               </div>
               <p v-else class="no-reviews-summary">No reviews yet</p>
             </div>
@@ -1120,7 +1120,7 @@ export default {
 }
 
 .stars {
-  color: #f8c102; /* Gold color for stars */
+  color: green; 
   font-weight: bold;
 }
 

@@ -120,7 +120,7 @@
                   <p class="booking-price">Total: ${{ formatPrice(booking.total_price) }}</p>
                   <p class="booking-status">Status: <span :class="`status-${booking.status_name}`">{{ booking.status_name }}</span></p>
                   <div class="booking-card-actions">
-                    <button @click="viewBookingDetails(booking.booking_id)" class="btn btn-small btn-primary-outline">View Details</button>
+                    <button @click="viewLocationDetails(booking.location_id)" class="btn btn-small btn-info-outline">View Location</button>
                     <button 
                       v-if="canCancelBooking(booking)" 
                       @click="promptCancelBooking(booking.booking_id)" 

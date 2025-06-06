@@ -89,6 +89,11 @@
               <span class="price-amount">€{{ location.price_per_night }}</span> night
             </div>
             
+            <!-- Date Conflict Message -->
+            <div v-if="dateConflictMessage" class="date-conflict-notice error-message">
+              {{ dateConflictMessage }}
+            </div>
+            
             <div class="booking-dates">
               <label class="date-label">Select Dates:</label>
               <v-date-picker 
@@ -123,7 +128,7 @@
             </div>
             
             <button @click="startBooking" class="booking-btn" :disabled="!dateRange.start || !dateRange.end">
-              Reserve
+              Book Now
             </button>
             
             <div class="booking-disclaimer">
@@ -217,8 +222,12 @@
           <div v-for="review in reviews" :key="review.review_id" class="review-item">
             <div class="review-header">
               <div class="reviewer-info">
-                <div class="reviewer-name">{{ review.reviewer_name }}</div>
-                <div class="review-date">{{ formatDate(review.created_at) }}</div>
+                <img v-if="review.user_profile_picture_url" :src="review.user_profile_picture_url" alt="Reviewer profile picture" class="reviewer-profile-pic">
+                <img v-else src="@/assets/logo.png" alt="Default profile picture" class="reviewer-profile-pic">
+                <div class="reviewer-details">
+                  <div class="reviewer-name">{{ review.reviewer_name }}</div>
+                  <div class="review-date">{{ formatDate(review.created_at) }}</div>
+                </div>
               </div>
               <div class="review-rating">
                 {{ '★'.repeat(review.overall_rating) }}
@@ -296,6 +305,7 @@ export default {
       isSubmittingReview: false,
       isEditingReview: false, // To track if user is editing a review
       editingReviewId: null, // To store the ID of the review being edited
+      dateConflictMessage: null, // Added for date conflict notification
     }
   },
   computed: {
@@ -316,20 +326,27 @@ export default {
       return this.location.average_rating ? parseFloat(this.location.average_rating) : 0;
     },
     reviewsCount() {
-      // Use the length of the loaded reviews array for an accurate count
+      // Use total_reviews from the location object if available, otherwise fallback to loaded reviews length
+      if (this.location && typeof this.location.total_reviews === 'number') {
+        return this.location.total_reviews;
+      }
       return this.reviews ? this.reviews.length : 0;
     },
     displayOverallRating() {
-      // Ensure reviews are loaded and the array is not empty
-      if (this.reviews && this.reviews.length > 0) {
-        const firstReview = this.reviews[0];
-        // Check if the first review exists and has a valid 'overall_rating'
-        if (firstReview && typeof firstReview.overall_rating === 'number' &&
-            firstReview.overall_rating >= 1 && firstReview.overall_rating <= 5) {
-          return firstReview.overall_rating; // Return the integer rating
-        }
+      // Use the average_rating fetched with the location data for consistency
+      if (this.location && typeof this.location.average_rating === 'number') {
+        // Ensure it's a number and format to one decimal place
+        const avgRating = parseFloat(this.location.average_rating);
+        return avgRating.toFixed(1);
       }
-      return null; // Return null if no valid rating can be determined
+      // Fallback if average_rating is not available on location object (should not happen if API is consistent)
+      // Or if we want to calculate fresh from loaded reviews (less consistent with other pages)
+      if (this.reviews && this.reviews.length > 0) {
+        const totalRating = this.reviews.reduce((sum, review) => sum + review.overall_rating, 0);
+        const average = totalRating / this.reviews.length;
+        return parseFloat(average.toFixed(1));
+      }
+      return null; // Or a default like 'N/A' or 0.0
     },
     userReview() {
       if (!this.isAuthenticated || !this.reviews || this.reviews.length === 0) {
@@ -363,13 +380,69 @@ export default {
       }
     },
     
+    initializeDatesFromQuery() {
+      const query = this.$route.query;
+      if (query.start_date && query.end_date) {
+        const startDate = new Date(query.start_date + 'T00:00:00');
+        const endDate = new Date(query.end_date + 'T00:00:00');
+        if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate >= startDate) {
+          this.dateRange = { start: startDate, end: endDate };
+          console.log('[LocationDetailsPage] Dates initialized from query:', this.dateRange);
+        } else {
+          console.warn('[LocationDetailsPage] Invalid or inconsistent date range from query parameters:', query.start_date, query.end_date);
+          this.dateRange = { start: null, end: null }; // Reset if invalid
+        }
+      } else {
+        console.log('[LocationDetailsPage] No start_date/end_date in query for date picker initialization.');
+      }
+    },
+
+    checkInitialDateConflict() {
+      if (!this.dateRange.start || !this.dateRange.end) {
+        this.dateConflictMessage = null; // No selected range to check
+        return;
+      }
+
+      const selectedStart = new Date(this.dateRange.start); // Ensure it's a Date object
+      const selectedEnd = new Date(this.dateRange.end);     // Ensure it's a Date object
+
+      // Ensure allDisabledDatesForCalendar is populated by calling prepareCalendarAttributes if it hasn't run yet
+      // This might be redundant if loadLocationDetails ensures correct order, but good for safety.
+      if (this.calendarAttributes.length === 0 && (this.bookedDates.length > 0 || this.ownerUnavailabilities.length > 0)) {
+        this.prepareCalendarAttributes();
+      }
+
+      for (const disabledPeriod of this.allDisabledDatesForCalendar) {
+        const disabledStart = new Date(disabledPeriod.start);
+        const disabledEnd = new Date(disabledPeriod.end);
+
+        // Check for overlap: (StartA < EndB) and (EndA > StartB)
+        // For date ranges, we usually consider them inclusive at the start and exclusive at the end for day-based bookings,
+        // or inclusive for both if dealing with full days. v-calendar's disabled-dates usually means the whole day.
+        // Let's assume disabled dates are inclusive ranges of days.
+        // A conflict exists if the selected range (inclusive start, inclusive end) overlaps any part of a disabled range.
+        if (selectedStart <= disabledEnd && selectedEnd >= disabledStart) {
+          const formattedQueryStart = this.formatDateToString(selectedStart);
+          const formattedQueryEnd = this.formatDateToString(selectedEnd);
+          this.dateConflictMessage = `The dates (${formattedQueryStart} to ${formattedQueryEnd}) you selected from your previous search are not available for this location. Please choose different dates.`;
+          console.warn('[LocationDetailsPage] Date conflict detected with query dates:', this.dateRange, 'and disabled period:', disabledPeriod);
+          return; // Found a conflict, no need to check further
+        }
+      }
+      this.dateConflictMessage = null; // No conflicts found
+      console.log('[LocationDetailsPage] No date conflicts found for query dates:', this.dateRange);
+    },
+    
     async loadLocationDetails() {
       console.log('[LocationDetailsPage] loadLocationDetails started. Location ID:', this.$route.params.id);
       try {
         this.isLoading = true;
         const locationId = this.$route.params.id;
         
-        // Load location details
+        // Initialize dates from URL query first
+        this.initializeDatesFromQuery();
+        
+        // Load location details (general info)
         console.log('[LocationDetailsPage] Fetching location details...');
         const locationResponse = await axios.get(`http://localhost:3001/locations/${locationId}`);
         console.log('[LocationDetailsPage] Location details response:', JSON.parse(JSON.stringify(locationResponse.data)));
@@ -387,7 +460,7 @@ export default {
           }
         }
         
-        // Load images
+        // Load images, amenities, campsite types
         console.log('[LocationDetailsPage] Fetching images. Current this.images before fetch:', JSON.parse(JSON.stringify(this.images)));
         const imagesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/images`);
         console.log('[LocationDetailsPage] Images API Response:', JSON.parse(JSON.stringify(imagesResponse.data)));
@@ -402,14 +475,12 @@ export default {
           console.log('[LocationDetailsPage] No images found or images array is empty. currentImage set to null.');
         }
         
-        // Load amenities
         console.log('[LocationDetailsPage] Fetching amenities. Current this.amenities before fetch:', JSON.parse(JSON.stringify(this.amenities)));
         const amenitiesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/amenities`);
         console.log('[LocationDetailsPage] Amenities API Response:', JSON.parse(JSON.stringify(amenitiesResponse.data)));
         this.amenities = amenitiesResponse.data;
         console.log('[LocationDetailsPage] After assigning amenities - this.amenities:', JSON.parse(JSON.stringify(this.amenities)));
         
-        // Load campsite types
         console.log('[LocationDetailsPage] Fetching campsite types. Current this.campsiteTypes before fetch:', JSON.parse(JSON.stringify(this.campsiteTypes)));
         const typesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/campsitetype`);
         console.log('[LocationDetailsPage] Campsite Types API Response:', JSON.parse(JSON.stringify(typesResponse.data)));
@@ -425,6 +496,12 @@ export default {
         
         // Load owner-set unavailabilities for this location
         await this.loadOwnerUnavailabilities(locationId); // Added call
+        
+        // Prepare calendar attributes (highlights, popovers) after all date data is loaded
+        this.prepareCalendarAttributes();
+
+        // Now check for conflicts with the dates potentially set from the query
+        this.checkInitialDateConflict();
         
         // Check if user can review
         if (this.isAuthenticated) {
@@ -682,8 +759,12 @@ export default {
       }
       if (!this.dateRange.start || !this.dateRange.end || this.nights <= 0) {
         this.errorMessage = 'Please select valid check-in and check-out dates.';
-        // Optionally, clear the error message after a few seconds
         setTimeout(() => { this.errorMessage = null; }, 3000);
+        return;
+      }
+      // If there's a conflict message from pre-filled dates, prevent booking
+      if (this.dateConflictMessage) {
+        alert(this.dateConflictMessage); // Alert the user about the conflict
         return;
       }
       // Proceed to booking page
@@ -745,6 +826,12 @@ export default {
   padding: 15px;
   border-radius: 8px;
   margin: 20px 0;
+}
+
+.date-conflict-notice {
+  /* Inherits from .error-message, but you can add specific styles if needed */
+  margin-top: 0; /* Adjust if it's inside booking-card-content */
+  margin-bottom: 15px; /* Space before the date picker */
 }
 
 .image-gallery {
@@ -825,6 +912,7 @@ export default {
 .stars {
   color: green; /* Changed to green */
   font-weight: bold;
+  font-size: 20px;
 }
 
 .reviews-count {
@@ -973,7 +1061,7 @@ export default {
 .booking-btn {
   width: 100%;
   padding: 15px;
-  background-color: #42b983;
+  background-color: #009a15;
   color: white;
   border: none;
   border-radius: 8px;
@@ -1102,6 +1190,7 @@ export default {
   padding: 15px;
   background-color: #f8f9fa;
   border-radius: 8px;
+  border: 1px solid #ddd; /* Added border */
 }
 
 .review-header {
@@ -1127,6 +1216,24 @@ export default {
 .review-comment {
   color: #333;
   line-height: 1.5;
+}
+
+.reviewer-info {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Space between picture and text */
+}
+
+.reviewer-profile-pic {
+  width: 40px; 
+  height: 40px; 
+  border-radius: 50%; 
+  object-fit: cover; 
+}
+
+.reviewer-details {
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 950px) {

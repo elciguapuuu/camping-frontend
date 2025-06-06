@@ -45,7 +45,7 @@
               :max="minMaxPrice.max"
               step="10"
               class="price-slider"
-              @input="applyFilters"
+              @input="updateFiltersInUrl"
             >
             <div class="price-range-labels">
               <span>€{{ minMaxPrice.min }}</span>
@@ -63,7 +63,7 @@
               :id="'type-' + type.campsitetypes_id" 
               :value="type.campsitetypes_id" 
               v-model="selectedCampsiteTypes"
-              @change="applyFilters"
+              @change="updateFiltersInUrl"
             >
             <label :for="'type-' + type.campsitetypes_id">{{ type.name }}</label>
           </div>
@@ -78,7 +78,7 @@
               :id="'amenity-' + amenity.amenity_id" 
               :value="amenity.amenity_id" 
               v-model="selectedAmenities"
-              @change="applyFilters"
+              @change="updateFiltersInUrl"
             >
             <label :for="'amenity-' + amenity.amenity_id">{{ amenity.name }}</label>
           </div>
@@ -136,7 +136,7 @@
                 <h3>{{ location.name }}</h3>
                 <div class="location-rating">
                   <template v-if="location.reviewsCount && location.reviewsCount > 0 && typeof location.averageRating === 'number'">
-                    <span class="stars">★ {{ location.averageRating.toFixed(1) }}</span>
+                    <span class="stars">★ {{ location.averageRating.toFixed(0) }}</span>
                     <span class="reviews-count-display"> ({{ location.reviewsCount }} {{ location.reviewsCount === 1 ? 'review' : 'reviews' }})</span>
                   </template>
                   <template v-else-if="location.reviewsCount && location.reviewsCount > 0">
@@ -160,7 +160,7 @@
               </div>
               
               <div class="location-actions">
-                <router-link :to="`/location/${location.location_id}`" class="view-details">
+                <router-link :to="{ path: `/location/${location.location_id}`, query: getCurrentSearchParamsForDetails() }" class="view-details">
                   View Details
                 </router-link>
                 <button 
@@ -350,7 +350,16 @@ export default {
   },
   created() {
     this.checkAuth();
-    this.loadInitialData();
+    this.loadInitialData(); // This will call initSearchFromUrlQuery and performSearch
+  },
+  watch: {
+    '$route.query': {
+      handler() {
+        this.loadInitialData();
+      },
+      deep: true,
+      immediate: false // Set to false to avoid double loading on initial creation
+    }
   },
   methods: {
     checkAuth() {
@@ -394,29 +403,35 @@ export default {
       }
     },
     
-    formatDateToString(date) {
-      if (!date) return '';
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    },
-    parseDateFromString(dateString) {
-      if (!dateString) return null;
-      const parts = dateString.split('-');
-      if (parts.length === 3) {
-        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-      }
-      return null;
-    },
     initSearchFromUrlQuery() {
       const query = this.$route.query;
-      
-      this.searchLocation = query.query || query.location || '';
-      
-      // Parse date strings from URL to Date objects for v-date-picker
-      this.dateRange.start = this.parseDateFromString(query.start_date);
-      this.dateRange.end = this.parseDateFromString(query.end_date);
+      this.searchLocation = query.query || query.search_query || ''; // Use 'query' from its own search, or 'search_query' if coming from HomePage
+
+      if (query.start_date && query.end_date) {
+        const startDate = new Date(query.start_date + 'T00:00:00Z');
+        const endDate = new Date(query.end_date + 'T00:00:00Z');
+        if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate >= startDate) {
+          this.dateRange = { start: startDate, end: endDate };
+        } else {
+          this.dateRange = { start: null, end: null };
+          console.warn('SearchResultsPage: Invalid date range from query parameters.');
+        }
+      } else {
+        this.dateRange = { start: null, end: null };
+      }
+      // Initialize filters from query if they exist
+      if (query.types) {
+        this.selectedCampsiteTypes = query.types.split(',').map(id => parseInt(id, 10));
+      }
+      if (query.amenities) {
+        this.selectedAmenities = query.amenities.split(',').map(id => parseInt(id, 10));
+      }
+      if (query.rating) {
+        this.selectedRating = parseInt(query.rating, 10);
+      }
+      if (query.max_price) {
+        this.maxPriceFilter = parseInt(query.max_price, 10);
+      }
     },
     
     async performSearch() {
@@ -481,30 +496,121 @@ export default {
     },
     
     searchLocations() {
-      // Update URL
-      const urlParams = {};
-      if (this.searchLocation) urlParams.query = this.searchLocation;
-      
-      const formattedCheckIn = this.formatDateToString(this.dateRange.start);
-      const formattedCheckOut = this.formatDateToString(this.dateRange.end);
+      // This method is called when the user clicks the search button on this page
+      // It should update the URL query parameters and then trigger a new search
+      const queryParams = {};
+      if (this.searchLocation) {
+        queryParams.query = this.searchLocation; // Main search term for this page
+        queryParams.search_query = this.searchLocation; // For consistency if navigating back to home
+      }
+      if (this.dateRange && this.dateRange.start && this.dateRange.end) {
+        queryParams.start_date = this.formatDateToString(this.dateRange.start);
+        queryParams.end_date = this.formatDateToString(this.dateRange.end);
+      }
+      // Persist filters in URL
+      if (this.selectedCampsiteTypes.length > 0) {
+        queryParams.types = this.selectedCampsiteTypes.join(',');
+      }
+      if (this.selectedAmenities.length > 0) {
+        queryParams.amenities = this.selectedAmenities.join(',');
+      }
+      if (this.selectedRating > 0) {
+        queryParams.rating = this.selectedRating.toString();
+      }
+      if (this.maxPriceFilter < this.minMaxPrice.max) { // Only add if not default max
+        queryParams.max_price = this.maxPriceFilter.toString();
+      }
 
-      if (formattedCheckIn) urlParams.start_date = formattedCheckIn;
-      if (formattedCheckOut) urlParams.end_date = formattedCheckOut;
-      
-      this.$router.replace({ 
-        path: '/search', 
-        query: urlParams
-      }).catch(err => {
-        // ignore redundant navigation errors
+      this.$router.push({ path: '/search', query: queryParams }).catch(err => {
         if (err.name !== 'NavigationDuplicated') {
-          console.error('Navigation error:', err);
+          console.error(err);
         }
       });
-      
-      // Perform the search
-      this.performSearch();
+      // The search itself will be triggered by the route query watcher or by loadInitialData if it's the first load.
+      // If we want to force a search without relying on the watcher (e.g., if query params don't change but we want to re-search)
+      // we might need to call performSearch() directly, but the watcher should handle it if query changes.
     },
-    
+
+    updateFiltersInUrl() { // RENAMED from applyFilters_main
+      // When filters are applied, update the URL and let the watcher trigger the search
+      const queryParams = { ...this.$route.query }; // Start with current query params
+
+      if (this.searchLocation) {
+        queryParams.query = this.searchLocation;
+        queryParams.search_query = this.searchLocation; 
+      } else {
+        delete queryParams.query;
+        delete queryParams.search_query;
+      }
+
+      if (this.dateRange && this.dateRange.start && this.dateRange.end) {
+        queryParams.start_date = this.formatDateToString(this.dateRange.start);
+        queryParams.end_date = this.formatDateToString(this.dateRange.end);
+      } else {
+        delete queryParams.start_date;
+        delete queryParams.end_date;
+      }
+      
+      if (this.selectedCampsiteTypes.length > 0) {
+        queryParams.types = this.selectedCampsiteTypes.join(',');
+      } else {
+        delete queryParams.types;
+      }
+
+      if (this.selectedAmenities.length > 0) {
+        queryParams.amenities = this.selectedAmenities.join(',');
+      } else {
+        delete queryParams.amenities;
+      }
+
+      if (this.selectedRating > 0) {
+        queryParams.rating = this.selectedRating.toString();
+      } else {
+        delete queryParams.rating;
+      }
+      
+      if (this.maxPriceFilter < this.minMaxPrice.max && this.minMaxPrice.max !== 0) { // also check if minMaxPrice.max is not 0 to avoid issues
+        queryParams.max_price = this.maxPriceFilter.toString();
+      } else {
+        delete queryParams.max_price; // Remove if it's the default max value or if max is 0
+      }
+
+      this.$router.push({ path: '/search', query: queryParams }).catch(err => {
+        if (err.name !== 'NavigationDuplicated') {
+          console.error(err);
+        }
+      });
+    },
+
+    getCurrentSearchParamsForDetails() {
+      const query = {};
+      // Use 'query' if available (from this page's search bar), otherwise 'search_query' (passed from home)
+      const locationQuery = this.$route.query.query || this.$route.query.search_query;
+      if (locationQuery) {
+        query.search_query = locationQuery; // Pass as search_query to HomePage and for LocationDetails
+      }
+      if (this.$route.query.start_date && this.$route.query.end_date) {
+        query.start_date = this.$route.query.start_date;
+        query.end_date = this.$route.query.end_date;
+      }
+      return query;
+    },
+
+    formatDateToString(date) {
+      if (!date) return '';
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    },
+    parseDateFromString(dateString) {
+      if (!dateString) return null;
+      const parts = dateString.split('-');
+      if (parts.length === 3) {
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      }
+      return null;
+    },
     async loadLocationsData(locations) {
       // Process all locations in parallel
       await Promise.all(locations.map(async (location) => {
@@ -578,6 +684,7 @@ export default {
       }));
     },
     
+    // applyFilters() { // This is the original applyFilters that processes the actual filtering logic
     applyFilters() {
       this.filteredResults = this.results.filter(location => {
         // Price filter
@@ -663,7 +770,7 @@ export default {
     
     setRating(rating) {
       this.selectedRating = rating;
-      this.applyFilters();
+      this.updateFiltersInUrl(); // CHANGED from applyFilters_main
     },
     
     resetFilters() {
@@ -671,7 +778,7 @@ export default {
       this.selectedAmenities = [];
       this.selectedRating = 0;
       this.maxPriceFilter = this.minMaxPrice.max; // Reset to max
-      this.applyFilters(); // Apply filters after resetting
+      this.updateFiltersInUrl(); // CHANGED from applyFilters_main
     },
     
     bookLocation(location) {
@@ -707,6 +814,7 @@ export default {
     closeMapModal() {
       this.showMapModal = false;
     },
+    // eslint-disable-next-line vue/no-dupe-keys
     applyMapFilters() {
       // This method is mainly a trigger. The computed property `filteredMapDisplayLocations` handles the logic.
       // You might call this explicitly if you need to force a re-render or some other side effect.
@@ -751,10 +859,10 @@ export default {
     },
     setMapRating(rating) {
       this.mapFilters.selectedRating = this.mapFilters.selectedRating === rating ? 0 : rating;
-      this.applyMapFilters();
+      this.applyMapFilters(); // This is for the map's internal filtering, not URL update
     },
   }
-}
+};
 </script>
 
 <style scoped>
@@ -826,13 +934,16 @@ export default {
 }
 
 .search-btn {
-  background-color: #eee;
-  border: 1px solid #ddd;
+  background-color: #009a15;
+  border: 1px solid #009a15;
   padding: 10px 18px; /* Adjusted padding */
   height: 40px; /* Match input height */
   border-radius: 4px;
   cursor: pointer;
-  font-weight: 600;
+}
+
+.search-btn:hover {
+  background-color: darkgreen;
 }
 
 .results-container {
@@ -1041,19 +1152,28 @@ export default {
   margin-top: 10px;
 }
 
-.view-details, .book-btn {
+.book-btn {
   flex: 1;
   padding: 8px 12px;
   text-align: center;
   border-radius: 4px;
   font-weight: 600;
   border: 1px solid #ddd;
-  background-color: #f7f7f7;
+  background-color: #009a15;
   text-decoration: none;
 }
 
 .view-details {
   margin-right: 10px;
+  flex: 1;
+  padding: 8px 12px;
+  text-align: center;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid #ddd;
+  background-color: white;
+  text-decoration: none;
+  
 }
 
 .book-btn:disabled {

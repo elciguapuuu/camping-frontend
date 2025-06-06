@@ -833,323 +833,387 @@ export default {
 
 <style scoped>
 .location-analytics-page {
-  max-width: 900px;
-  margin: 20px auto;
   padding: 20px;
-  font-family: 'Arial', sans-serif;
-  background-color: #f4f7f6;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  max-width: 1200px;
+  margin: 0 auto;
+  animation: fadeInPage 1s ease-out;
+}
+
+@keyframes fadeInPage {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .back-button {
-  background-color: #27ae60;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 5px;
-  font-size: 1rem;
-  font-weight: bold;
-  transition: background-color 0.3s ease;
-}
-.back-button:hover {
-  background-color: #1e8e50;
-}
-
-h1, h2, h3 {
-  color: #333;
-}
-h1 {
-  text-align: center;
-  margin-bottom: 25px;
-  color: #2c3e50;
-}
-h2 {
-  border-bottom: 2px solid #eee;
-  padding-bottom: 10px;
-  margin-top: 30px;
   margin-bottom: 20px;
-  color: #34495e;
-}
-h3 {
-  margin-top: 20px;
-  margin-bottom: 10px;
-  color: #34495e;
+  padding: 8px 15px;
+  background-color: green;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
-.loading-message, .error-message {
-  text-align: center;
-  padding: 20px;
-  margin-top: 20px;
-  border-radius: 5px;
-}
-.loading-message {
+.back-button:hover {
   background-color: #e0e0e0;
 }
+
+h1 {
+  text-align: center;
+  margin-bottom: 30px;
+  animation: slideInDown 0.8s ease-out;
+}
+
+@keyframes slideInDown {
+  from { transform: translateY(-30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.loading-message,
 .error-message {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  text-align: center;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.loading-message {
+  background-color: #e9f5f1;
+  color: #42b983;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.analytics-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 30px;
 }
 
 .card {
   background-color: #fff;
-  padding: 20px;
+  padding: 25px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  margin-bottom: 25px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  animation: popIn 0.6s ease-out forwards;
+  opacity: 0;
+  transform: scale(0.95);
 }
 
-.calendar-section .v-calendar {
-  margin-top: 15px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+.card:hover {
+  transform: translateY(-5px) scale(1.01);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* Staggered animation for cards */
+.calendar-section.card { animation-delay: 0.2s; }
+.stats-section.card { animation-delay: 0.4s; }
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.card h2, .card h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
 }
 
 .unavailability-form {
   margin-bottom: 25px;
-  padding: 15px;
+  padding: 20px;
   background-color: #f9f9f9;
-  border-radius: 5px;
+  border-radius: 6px;
+  border: 1px solid #eee;
 }
+
 .date-input-group {
   display: flex;
-  align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
+  align-items: center;
+  margin-bottom: 15px;
 }
+
 .date-input, .reason-input {
-  padding: 8px 10px;
+  padding: 10px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 0.95em;
-}
-.date-input {
+  font-size: 0.95rem;
   flex-grow: 1;
 }
-.reason-input {
-  width: calc(100% - 22px); /* Full width minus padding/border */
-  margin-bottom: 10px;
-}
+
 .date-separator {
-  font-weight: bold;
+  color: #555;
 }
+
 .unavailability-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
   margin-top: 10px;
 }
-.action-btn {
-  background-color: #007bff;
-  color: white;
-  padding: 10px 15px;
+
+.action-btn, .delete-btn, .clear-selection-btn, .btn-secondary {
+  padding: 10px 18px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  font-weight: 500;
+  transition: background-color 0.2s, transform 0.1s;
 }
+
+.action-btn {
+  background-color: #e74c3c; /* Red for unavailability */
+  color: white;
+}
+
 .action-btn:hover {
-  background-color: #0056b3;
+  background-color: #c0392b;
 }
+
 .action-btn:disabled {
-  background-color: #ccc;
+  background-color: #f5b7b1;
   cursor: not-allowed;
+}
+
+.delete-btn {
+  background-color: #f1c40f; /* Yellow for delete */
+  color: #333;
+}
+
+.delete-btn:hover {
+  background-color: #d4ac0d;
+}
+
+.delete-btn:disabled {
+  background-color: #f9e79f;
+  cursor: not-allowed;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.btn-secondary {
+  background-color: #3498db; /* Blue for secondary actions */
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #2980b9;
+}
+
+.clear-selection-btn {
+  background-color: #95a5a6;
+  color: white;
+  margin-left: auto; /* Pushes button to the right if in a flex container */
+  display: block; /* Or use flex on parent */
+  margin-bottom: 10px;
+}
+
+.clear-selection-btn:hover {
+  background-color: #7f8c8d;
+}
+
+
+/* Calendar Styles */
+.vc-container {
+  border: 1px solid #eaeaea;
+  border-radius: 6px;
 }
 
 .calendar-legend {
   margin-top: 15px;
   display: flex;
-  gap: 15px;
-  font-size: 0.9em;
+  gap: 20px;
+  justify-content: center;
+  font-size: 0.9rem;
 }
+
 .legend-item {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
+
 .color-box {
   width: 15px;
   height: 15px;
-  margin-right: 5px;
-  border: 1px solid #ccc;
   border-radius: 3px;
+  border: 1px solid #ccc;
 }
-.color-box.available { background-color: lightblue; } /* Example, adjust to match dot */
-.color-box.occupied { background-color: red; }
-.color-box.owner-unavailable { background-color: lightgray; }
 
+.color-box.available { background-color: #e6f7ff; } /* Light blue for available */
+.color-box.occupied { background-color: #ffccc7; } /* Light red for booked */
+.color-box.owner-unavailable { background-color: #e8e8e8; } /* Light grey for owner unavailable */
+
+.existing-unavailabilities {
+  margin-top: 20px;
+}
 
 .existing-unavailabilities ul {
-  list-style-type: none;
-  padding-left: 0;
+  list-style: none;
+  padding: 0;
 }
+
 .existing-unavailabilities li {
-  background-color: #f1f1f1;
-  padding: 8px 12px;
-  margin-bottom: 8px;
+  background-color: #f9f9f9;
+  padding: 10px;
   border-radius: 4px;
+  margin-bottom: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-.delete-btn {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85em;
-}
-.delete-btn:hover {
-  background-color: #c82333;
-}
-.delete-btn:disabled {
-  background-color: #dddddd; /* Corrected from lightgray to a valid hex */
-  cursor: not-allowed;
-}
-.btn-small {
-  font-size: 0.8em;
-  padding: 4px 8px;
+  font-size: 0.95rem;
 }
 
-.stats-section p {
-  font-size: 1em;
-  color: #555;
-  margin-bottom: 8px;
-  line-height: 1.6;
-}
-
-.chart-container {
-  margin-top: 30px;
-  padding: 20px;
-  background-color: #f9f9f9; /* Light background for the chart area */
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow for depth */
-}
-
-.chart-container h3 {
-  margin-bottom: 15px;
-  text-align: center;
-  color: #333;
-}
-
-.no-chart-data {
-  margin-top: 30px;
-  padding: 20px;
-  text-align: center;
-  color: #666;
-  background-color: #f9f9f9;
-  border-radius: 8px;
-}
-
+/* Key Metrics */
 .metrics-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px; /* Add some space below the header */
-}
-
-.metrics-header h2 {
-  margin-bottom: 0; /* Remove default margin from h2 if it interferes */
-  margin-right: 10px; /* Add some space between title and button */
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-  /* Ensure other .btn-small styles like padding, border-radius are applied if not inheriting */
-  padding: 4px 8px; 
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-}
-.btn-secondary:hover {
-  background-color: #5a6268;
-}
-
-.selected-month-bookings,
-.no-bookings-selected-month {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: #e9ecef; /* A slightly different background */
-  border-radius: 8px;
-}
-
-.selected-month-bookings h3,
-.no-bookings-selected-month p {
-  margin-top: 0;
   margin-bottom: 15px;
-  color: #343a40;
-}
-
-.selected-month-bookings ul {
-  list-style-type: none;
-  padding-left: 0;
-}
-
-.selected-month-bookings li {
-  background-color: #fff;
-  padding: 10px;
-  margin-bottom: 8px;
-  border-radius: 4px;
-  border: 1px solid #dee2e6;
-  font-size: 0.9em;
-}
-
-.selected-month-bookings li strong {
-  color: #495057;
-}
-
-.clear-selection-btn {
-  background-color: #6c757d;
-  color: white;
-  margin-bottom: 10px;
-  /* Add other styling as needed from .btn-small or .action-btn if you want consistency */
-}
-.clear-selection-btn:hover {
-  background-color: #5a6268;
 }
 
 .key-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); /* Increased minmax for better spacing */
-  gap: 20px; /* Increased gap */
-  margin-top: 20px;
-  margin-bottom: 30px; /* Added more margin below the metric charts */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
 }
 
 .metric-item {
-  background-color: #f9f9f9;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  background-color: #fdfdfd;
+  padding: 20px;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  /* justify-content: space-between; */ /* Let's adjust this for pie charts */
+  transition: all 0.3s ease;
+}
+
+.metric-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.07);
 }
 
 .metric-item h3 {
-  margin-top: 0;
+  font-size: 1.1rem;
+  color: #555;
   margin-bottom: 10px;
-  font-size: 1.1em; 
+}
+
+.metric-value {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #42b983;
+  margin: 0;
+}
+
+.metric-value-pie {
+  font-size: 1.3rem; /* Slightly smaller for pie chart context */
+  font-weight: bold;
+  color: #3498db; /* Different color for pie chart values */
+  margin-top: 10px;
+}
+
+.chart-container-metric {
+  padding-bottom: 10px; /* Ensure space for metric value below pie chart */
+}
+
+.chart-container-metric .vue-chartjs-pie {
+  max-height: 120px; /* Control pie chart size */
+  margin: 0 auto 10px auto; /* Center pie chart and add margin */
+}
+
+/* Main Chart */
+.main-chart-container {
+  height: 400px; /* Ensure enough height for the column chart */
+  padding: 20px;
+  background-color: #fdfdfd;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.no-chart-data,
+.no-bookings-selected-month {
+  text-align: center;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  color: #777;
+  margin-top: 20px;
+}
+
+/* Selected Month Bookings */
+.selected-month-bookings {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #e9f7ef; /* Light green background */
+  border: 1px solid #d0e9d9;
+  border-radius: 6px;
+}
+
+.selected-month-bookings h3 {
+  color: #2c7a4d;
+}
+
+.selected-month-bookings ul {
+  list-style: none;
+  padding: 0;
+}
+
+.selected-month-bookings li {
+  background-color: #fff;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  border: 1px solid #e0e0e0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.selected-month-bookings li strong {
   color: #333;
 }
 
-.metric-text-display .metric-value {
-  font-size: 1.8em; 
-  color: #007bff; 
-  margin-top: auto; 
-  margin-bottom: auto; 
-  font-weight: bold;
-}
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 1.8rem;
+  }
 
-.chart-container-metric .vue-chartjs-canvas { /* Target generated canvas */
-  margin-bottom: 10px; /* Space between chart and text value */
-}
+  .key-metrics-grid {
+    grid-template-columns: 1fr; /* Stack metrics on smaller screens */
+  }
 
-.metric-value-pie { /* Style for the text value below pie charts */
-  font-size: 1.4em; /* Slightly smaller than main text metrics but still prominent */
-  color: #007bff;
-  font-weight: bold;
-  margin-top: 5px; /* Space above the text if chart is small */
+  .date-input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .date-separator {
+    display: none;
+  }
+
+  .unavailability-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action-btn, .reason-input {
+    width: 100%;
+  }
 }
 </style>

@@ -2,7 +2,7 @@
   <div class="home">
     <div class="hero">
       <div class="hero-content">
-        <h1>Welcome to Seeker</h1>
+        <h1>Welcome to Seeker<span v-if="userName">, {{ userName }}</span>!</h1>
         <p class="hero-subtitle">Find your perfect camping destination</p>
         
         <div class="search-container">
@@ -57,60 +57,22 @@
           <div class="location-info">
             <h3>{{ location.name }}</h3>
             <p class="location-area">{{ location.city }}, {{ location.country }}</p>
-            <p class="location-price">€{{ location.price_per_night }} per night</p>
-            
-            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
-              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
-            </div>
-
             <p class="location-rating">
               <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
-                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
+                <span class="stars">★ {{ Math.round(location.average_rating) }}</span>
                 <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
               </template>
               <template v-else>
                 <span class="no-reviews-text">No reviews yet</span>
               </template>
             </p>
-            
-            <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="top-rated-locations container" v-if="topRatedLocations.length > 0">
-      <h2>Top Rated Camping Spots</h2>
-      <div class="locations-grid">
-        <div v-for="location in topRatedLocations" :key="location.location_id" class="location-card">
-          <div class="location-image">
-            <img 
-              v-if="location.coverImage" 
-              :src="location.coverImage" 
-              :alt="location.name"
-              class="location-image"
-            />
-            <div v-else class="location-image-placeholder">
-              <span>No image available</span>
-            </div>
-          </div>
-          <div class="location-info">
-            <h3>{{ location.name }}</h3>
-            <p class="location-area">{{ location.city }}, {{ location.country }}</p>
             <p class="location-price">€{{ location.price_per_night }} per night</p>
+            
             <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
               <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
             </div>
-            <p class="location-rating">
-              <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
-                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
-                <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
-              </template>
-              <template v-else>
-                <span class="no-reviews-text">No reviews yet</span>
-              </template>
-            </p>
-            <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
+            
+            <router-link :to="{ path: `/location/${location.location_id}`, query: getCurrentSearchParams() }" class="view-details">View Details</router-link>
           </div>
         </div>
       </div>
@@ -134,20 +96,20 @@
           <div class="location-info">
             <h3>{{ location.name }}</h3>
             <p class="location-area">{{ location.city }}, {{ location.country }}</p>
-            <p class="location-price">€{{ location.price_per_night }} per night</p>
-            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
-              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
-            </div>
             <p class="location-rating">
               <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
-                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
+                <span class="stars">★ {{ Math.round(location.average_rating) }}</span>
                 <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
               </template>
               <template v-else>
                 <span class="no-reviews-text">No reviews yet</span>
               </template>
             </p>
-            <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
+            <p class="location-price">€{{ location.price_per_night }} per night</p>
+            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
+              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
+            </div>
+            <router-link :to="{ path: `/location/${location.location_id}`, query: getCurrentSearchParams() }" class="view-details">View Details</router-link>
           </div>
         </div>
       </div>
@@ -171,20 +133,20 @@
           <div class="location-info">
             <h3>{{ location.name }}</h3>
             <p class="location-area">{{ location.city }}, {{ location.country }}</p>
-            <p class="location-price">€{{ location.price_per_night }} per night</p>
-            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
-              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
-            </div>
             <p class="location-rating">
               <template v-if="location.review_count && location.review_count > 0 && typeof location.average_rating === 'number'">
-                <span class="stars">★ {{ location.average_rating.toFixed(1) }}</span>
+                <span class="stars">★ {{ Math.round(location.average_rating) }}</span>
                 <span class="reviews-count-display"> ({{ location.review_count }} {{ location.review_count === 1 ? 'review' : 'reviews' }})</span>
               </template>
               <template v-else>
                 <span class="no-reviews-text">No reviews yet</span>
               </template>
             </p>
-            <router-link :to="`/location/${location.location_id}`" class="view-details">View Details</router-link>
+            <p class="location-price">€{{ location.price_per_night }} per night</p>
+            <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
+              <span><strong>Types:</strong> {{ getCampsiteTypesList(location) }}</span>
+            </div>
+            <router-link :to="{ path: `/location/${location.location_id}`, query: getCurrentSearchParams() }" class="view-details">View Details</router-link>
           </div>
         </div>
       </div>
@@ -207,13 +169,13 @@ export default {
   data() {
     return {
       isAuthenticated: false,
+      userName: '', // Added for user's name
       searchLocation: '',
       dateRange: {
         start: null,
         end: null,
       },
       featuredLocations: [],
-      topRatedLocations: [],
       recentlyAddedLocations: [],
       uniqueExperiences: [],
       // allLocations: [], // Removed
@@ -236,17 +198,55 @@ export default {
   },
   created() {
     this.checkAuth();
+    this.loadUserName(); // Added call
     this.loadFeaturedLocations();
-    this.loadTopRatedLocations();
     this.loadRecentlyAddedLocations();
     this.loadUniqueExperiences();
-    // this.loadAllLocationsForMap(); // Removed
-    // this.loadFilterData(); // Removed
+    // Initialize search fields from route query parameters if they exist
+    if (this.$route.query.search_query) {
+      this.searchLocation = this.$route.query.search_query;
+    }
+    if (this.$route.query.start_date && this.$route.query.end_date) {
+      // Ensure dates are parsed correctly for v-date-picker
+      // The dates from query are strings, convert them to Date objects
+      // Adding 'T00:00:00Z' ensures they are parsed as UTC midnight,
+      // or handle timezone consistently based on application needs.
+      const startDate = new Date(this.$route.query.start_date + 'T00:00:00Z');
+      const endDate = new Date(this.$route.query.end_date + 'T00:00:00Z');
+
+      // Basic validation for dates
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate >= startDate) {
+        this.dateRange = { start: startDate, end: endDate };
+      } else {
+        // If dates are invalid or end is before start, reset to default or handle error
+        this.dateRange = { start: null, end: null };
+        // Optionally, notify user or log this situation
+        console.warn('Invalid date range from query parameters.');
+      }
+    }
   },
   methods: {
     checkAuth() {
       const token = localStorage.getItem('token');
       this.isAuthenticated = !!token;
+    },
+    loadUserName() {
+      if (this.isAuthenticated) {
+        const userString = localStorage.getItem('user');
+        if (userString) {
+          try {
+            const user = JSON.parse(userString);
+            if (user && user.firstName) {
+              this.userName = user.firstName;
+            } else if (user && user.name) { // Fallback to name if firstName is not available
+              this.userName = user.name;
+            }
+          } catch (e) {
+            console.error('Error parsing user data from localStorage:', e);
+            this.userName = ''; // Reset on error
+          }
+        }
+      }
     },
     loadFeaturedLocations() {
       axios.get('http://localhost:3001/locations?limit=6&featured=true') 
@@ -257,15 +257,6 @@ export default {
         .catch(error => {
           console.error('Error loading featured locations:', error);
         });
-    },
-    async loadTopRatedLocations() {
-      try {
-        const response = await axios.get('http://localhost:3001/locations?sort=average_rating&order=desc&limit=6');
-        this.topRatedLocations = response.data.filter(location => !this.featuredLocations.some(featured => featured.location_id === location.location_id));
-        await this.loadSubDetailsForLocations(this.topRatedLocations);
-      } catch (error) {
-        console.error('Error loading top-rated locations:', error);
-      }
     },
     async loadRecentlyAddedLocations() {
       try {
@@ -339,7 +330,8 @@ export default {
     searchLocations() {
       const queryParams = {};
       if (this.searchLocation) {
-        queryParams.query = this.searchLocation;
+        queryParams.query = this.searchLocation; // For SearchResultsPage
+        queryParams.search_query = this.searchLocation; // For persisting back to HomePage
       }
       const formattedCheckIn = this.formatDateToString(this.dateRange.start);
       const formattedCheckOut = this.formatDateToString(this.dateRange.end);
@@ -352,6 +344,17 @@ export default {
         path: '/search', 
         query: queryParams
       });
+    },
+    getCurrentSearchParams() {
+      const query = {};
+      if (this.searchLocation) {
+        query.search_query = this.searchLocation;
+      }
+      if (this.dateRange && this.dateRange.start && this.dateRange.end) {
+        query.start_date = this.formatDateToString(this.dateRange.start);
+        query.end_date = this.formatDateToString(this.dateRange.end);
+      }
+      return query;
     },
     formatDateToString(date) {
       if (!date) return '';
@@ -459,8 +462,8 @@ export default {
 }
 
 .search-btn {
-  background-color: #f7f7f7;
-  border: 1px solid #ddd;
+  background-color: #009a15;
+  border: 1px solid #009a15;
   padding: 12px 20px;
   border-radius: 4px;
   cursor: pointer;
