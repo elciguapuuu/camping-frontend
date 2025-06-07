@@ -3,6 +3,19 @@
 ## Project Overview
 This is the frontend for Seeker, a camping spot rental platform. It is built with Vue.js.
 
+## Installation
+To get a local copy up and running, follow these simple steps.
+
+1. Clone the repo:
+   ```sh
+   git clone https://github.com/elciguapuuu/camping-backend/tree/main
+   ```
+   
+2. Navigate to the project directory:
+   ```sh
+   cd camping-app
+   ```
+
 ## Project setup
 ```
 npm install
