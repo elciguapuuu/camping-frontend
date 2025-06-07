@@ -547,12 +547,12 @@ export default {
 .location-rating {
   margin-top: 5px;
   font-size: 1.1rem; /* Increase font size */
-  color: #27ae60; /* Green color for ratings */
+  color: green; /* Green color for ratings */
   font-weight: bold; /* Make it bold to grab attention */
 }
 
 .stars {
-  color: #27ae60; /* Green color for stars */
+  color: green; /* Green color for stars */
 }
 
 .reviews-count-display {

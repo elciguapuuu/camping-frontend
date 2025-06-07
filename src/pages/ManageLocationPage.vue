@@ -260,7 +260,7 @@
     
     <!-- My Locations Section -->
     <div class="my-locations-section"> <!-- Renamed for clarity -->
-      <h3 v-if="userLocations.length > 0 && !showLocationForm">My Existing Locations</h3>
+      <h3 v-if="userLocations.length > 0 && !showLocationForm">My Listings</h3>
       <div v-if="userLocations.length === 0 && !isLoadingLocations" class="empty-state">
         <p>You haven't added any locations yet. Click "Add New Location" to get started!</p>
       </div>

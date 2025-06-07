@@ -1090,7 +1090,7 @@ export default {
 }
 
 .star.active {
-  color: #ffc107;
+  color: green;
 }
 
 .comment-input {

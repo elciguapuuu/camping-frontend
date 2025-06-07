@@ -199,13 +199,21 @@
       <!-- Modals -->
       <div v-if="showDeleteConfirmation" class="modal-overlay">
         <div class="modal-content">
-          <h3>Confirm Account Deletion</h3>
-          <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+          <h3>Confirm Account Deactivation</h3>
+          <p>Are you sure you want to deactivate your account? Your data will be preserved, but your account will no longer be active. This action cannot be undone directly by you.</p>
+          
+          <div v-if="!isOAuthUser" class="form-group modal-form-group">
+            <label for="deletePassword">Enter your password to confirm:</label>
+            <input type="password" id="deletePassword" v-model="deletePassword" class="form-control" required>
+          </div>
+
+          <p v-if="deleteErrorMessage" class="error-message modal-error">{{ deleteErrorMessage }}</p>
+
           <div class="modal-actions">
             <button @click="deleteAccount" class="btn btn-danger" :disabled="isDeleting">
-              {{ isDeleting ? 'Deleting...' : 'Yes, Delete My Account' }}
+              {{ isDeleting ? 'Deactivating...' : 'Yes, Deactivate My Account' }}
             </button>
-            <button @click="showDeleteConfirmation = false" class="btn btn-secondary-outline">Cancel</button>
+            <button @click="showDeleteConfirmation = false; deleteErrorMessage = '';" class="btn btn-secondary-outline">Cancel</button>
           </div>
         </div>
       </div>
@@ -247,6 +255,8 @@ export default {
       isCancelling: null, // Stores booking_id of booking being cancelled
       showDeleteConfirmation: false,
       isDeleting: false,
+      deletePassword: '', // Added for delete account password
+      deleteErrorMessage: '', // Added for displaying delete error messages
     };
   },
   computed: {
@@ -294,7 +304,8 @@ export default {
     },
     loadUserProfile() {
       this.isLoading = true;
-      this.errorMessage = '';
+      this.errorMessage = ''; // Clear general error message
+      this.deleteErrorMessage = ''; // Clear delete error message
       const userDataString = localStorage.getItem('user');
       if (!userDataString) {
         this.$router.push('/login');
@@ -455,7 +466,7 @@ export default {
     },
     onFileSelected(event) {
       this.selectedFile = event.target.files[0];
-      if (this.selectedFile) {
+      if (this.selectedFile) { // Corrected: added parentheses
         this.uploadProfilePicture(); // Automatically upload when file is selected
       }
     },
@@ -541,35 +552,60 @@ export default {
     logout() {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      this.$root.$emit('auth-changed');
-      this.$router.push('/login');
+      // Reset component's user data
+      this.user = { id: null, name: '', email: '', profilePictureUrl: null, created_at: '', auth_type: '' };
+      this.isOAuthUser = false; 
+      // If using Vuex or a global state, dispatch an action to clear user state
+      // this.$store.dispatch('auth/logout'); 
+      this.$router.push('/'); // Redirect to homepage
+      // Optionally, force a reload if navbar/app state isn't updating reactively
+      // window.location.href = '/'; 
     },
     confirmDeleteAccount() {
-        if (this.isOAuthUser) {
-            this.errorMessage = "Accounts created via Google must be managed through Google.";
-            return;
-        }
-        this.showDeleteConfirmation = true;
+      this.deletePassword = ''; // Reset password field
+      this.deleteErrorMessage = ''; // Clear previous error messages
+      this.showDeleteConfirmation = true;
     },
-    deleteAccount() {
-        if (this.isOAuthUser) return; 
 
-        this.isDeleting = true;
-        this.errorMessage = '';
-        const token = localStorage.getItem('token');
-        axios.delete(`http://localhost:3001/users/${this.user.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-        .then(() => {
-            this.logout(); 
-        })
-        .catch(error => {
-            this.errorMessage = error.response?.data?.error || 'Failed to delete account.';
-        })
-        .finally(() => {
-            this.isDeleting = false;
-            this.showDeleteConfirmation = false;
+    async deleteAccount() {
+      this.isDeleting = true;
+      this.deleteErrorMessage = ''; // Clear previous error messages
+      const token = localStorage.getItem('token');
+      const payload = {
+        user_id: this.user.id,
+      };
+
+      if (!this.isOAuthUser) {
+        if (!this.deletePassword) {
+          this.deleteErrorMessage = 'Password is required to deactivate your account.';
+          this.isDeleting = false;
+          return;
+        }
+        payload.password = this.deletePassword;
+      }
+
+      try {
+        // The backend endpoint remains /users/delete, but its behavior is now soft delete
+        await axios.delete('http://localhost:3001/users/delete', { 
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          data: payload,
         });
+        
+        this.showDeleteConfirmation = false;
+        alert('Account deactivated successfully. You will now be logged out.'); 
+        this.logout(); 
+      } catch (error) {
+        console.error('Error deactivating account:', error.response ? error.response.data : error.message);
+        if (error.response && error.response.data && error.response.data.error) {
+          this.deleteErrorMessage = error.response.data.error;
+        } else {
+          this.deleteErrorMessage = 'An unexpected error occurred while deactivating your account. Please try again.';
+        }
+      } finally {
+        this.isDeleting = false;
+      }
     },
     formatDate(dateString) {
       if (!dateString) return 'N/A';

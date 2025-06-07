@@ -46,7 +46,7 @@
               <li>One uppercase letter (A-Z)</li>
               <li>One lowercase letter (a-z)</li>
               <li>One number (0-9)</li>
-              <li>One special character (@$!%*?&)</li>
+              <li>One special character (e.g., !@#$%^&amp;*()_+-=[]{};':&quot;\\\|,.&lt;&gt;/?~)</li>
             </ul>
           </div>
         </div>
@@ -120,16 +120,22 @@ export default {
     },
     
     validatePassword() {
-      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      // Password must contain at least one lowercase letter, one uppercase letter, one digit,
+      // one special character, and be at least 8 characters long.
+      // Special characters include: !@#$%^&*()_-+=[]{};':"\\\\|,.<>/?~
+      // Regex matches backend. Using new RegExp() for robustness with complex escapes.
+      const patternString = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_\\-+=\\[\\]{};':\"\\\\|,.<>/?~])[A-Za-z\\d!@#$%^&*()_\\-+=\\[\\]{};':\"\\\\|,.<>/?~]{8,}$";
+      const passwordRegex = new RegExp(patternString);
       if (!this.password) {
-        this.passwordError = 'Password is required';
+        this.passwordError = 'Password is required.';
         return false;
       } else if (!passwordRegex.test(this.password)) {
-        this.passwordError = 'Password does not meet requirements';
+        this.passwordError = 'Password does not meet requirements. It must be at least 8 characters long, include an uppercase letter, a lowercase letter, a number, and a special character (e.g., !@#$%^&*()_+-=[]{};\\\':"\\\\\\\\|,.<>/?~).';
         return false;
+      } else {
+        this.passwordError = '';
+        return true;
       }
-      this.passwordError = '';
-      return true;
     },
     
     async handleRegister() {
