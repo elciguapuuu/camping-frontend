@@ -9,7 +9,7 @@
     
     <div class="navbar-right">
       <router-link v-if="isAuthenticated" to="/manage-location" class="nav-link host-link">
-        Manage locations
+        My Listings
       </router-link>
       
       <!-- Login and Register buttons when NOT authenticated -->
@@ -39,7 +39,6 @@
         
         <div v-show="showDropdown" class="dropdown-menu">
           <router-link to="/profile" class="dropdown-item">Profile</router-link>
-          <router-link to="/manage-location" class="dropdown-item">My Listings</router-link>
           <div @click="logout" class="dropdown-item logout">Log out</div>
         </div>
       </div>

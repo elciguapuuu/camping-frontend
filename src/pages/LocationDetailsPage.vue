@@ -290,7 +290,6 @@ export default {
         end: null,
       },
       bookedDates: [],
-      ownerUnavailabilities: [], // New data property for owner-set unavailabilities
       calendarAttributes: [],
       isAuthenticated: false,
       userId: null,
@@ -355,14 +354,15 @@ export default {
       return this.reviews.find(review => review.user_id === this.userId);
     },
     allDisabledDatesForCalendar() {
-      // Combine booked dates and owner unavailabilities for the v-calendar disabled-dates prop
+      // Combine booked dates for the v-calendar disabled-dates prop
       const disabledRanges = [];
       this.bookedDates.forEach(range => {
-        disabledRanges.push({ start: range.start, end: range.end });
+        if (range && range.start && range.end && range.end >= range.start) { // Added validation
+          disabledRanges.push({ start: range.start, end: range.end });
+        }
       });
-      this.ownerUnavailabilities.forEach(range => {
-        disabledRanges.push({ start: range.start, end: range.end });
-      });
+      // ownerUnavailabilities.forEach removed
+      // console.log('[LocationDetailsPage] allDisabledDatesForCalendar computed (booked only):', JSON.parse(JSON.stringify(disabledRanges.map(r => ({start: r.start && r.start.toISOString().split('T')[0], end: r.end && r.end.toISOString().split('T')[0]})))));
       return disabledRanges;
     }
   },
@@ -408,7 +408,7 @@ export default {
 
       // Ensure allDisabledDatesForCalendar is populated by calling prepareCalendarAttributes if it hasn't run yet
       // This might be redundant if loadLocationDetails ensures correct order, but good for safety.
-      if (this.calendarAttributes.length === 0 && (this.bookedDates.length > 0 || this.ownerUnavailabilities.length > 0)) {
+      if (this.calendarAttributes.length === 0 && (this.bookedDates.length > 0)) {
         this.prepareCalendarAttributes();
       }
 
@@ -439,16 +439,13 @@ export default {
         this.isLoading = true;
         const locationId = this.$route.params.id;
         
-        // Initialize dates from URL query first
         this.initializeDatesFromQuery();
         
-        // Load location details (general info)
         console.log('[LocationDetailsPage] Fetching location details...');
         const locationResponse = await axios.get(`http://localhost:3001/locations/${locationId}`);
         console.log('[LocationDetailsPage] Location details response:', JSON.parse(JSON.stringify(locationResponse.data)));
         this.location = locationResponse.data;
         
-        // Load owner information
         if (this.location.owner_id) {
           try {
             console.log('[LocationDetailsPage] Fetching owner information for owner_id:', this.location.owner_id);
@@ -460,50 +457,41 @@ export default {
           }
         }
         
-        // Load images, amenities, campsite types
-        console.log('[LocationDetailsPage] Fetching images. Current this.images before fetch:', JSON.parse(JSON.stringify(this.images)));
+        console.log('[LocationDetailsPage] Fetching images...');
         const imagesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/images`);
-        console.log('[LocationDetailsPage] Images API Response:', JSON.parse(JSON.stringify(imagesResponse.data)));
         this.images = imagesResponse.data;
-        console.log('[LocationDetailsPage] After assigning images - this.images:', JSON.parse(JSON.stringify(this.images)));
         if (this.images && this.images.length > 0) {
           const coverImage = this.images.find(img => img.is_cover === 1 || img.is_cover === true) || this.images[0];
           this.currentImage = coverImage.image_url;
-          console.log('[LocationDetailsPage] Cover image found. currentImage:', this.currentImage);
         } else {
-          this.currentImage = null; // Ensure currentImage is reset if no images
-          console.log('[LocationDetailsPage] No images found or images array is empty. currentImage set to null.');
+          this.currentImage = null;
         }
         
-        console.log('[LocationDetailsPage] Fetching amenities. Current this.amenities before fetch:', JSON.parse(JSON.stringify(this.amenities)));
+        console.log('[LocationDetailsPage] Fetching amenities...');
         const amenitiesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/amenities`);
-        console.log('[LocationDetailsPage] Amenities API Response:', JSON.parse(JSON.stringify(amenitiesResponse.data)));
         this.amenities = amenitiesResponse.data;
-        console.log('[LocationDetailsPage] After assigning amenities - this.amenities:', JSON.parse(JSON.stringify(this.amenities)));
         
-        console.log('[LocationDetailsPage] Fetching campsite types. Current this.campsiteTypes before fetch:', JSON.parse(JSON.stringify(this.campsiteTypes)));
+        console.log('[LocationDetailsPage] Fetching campsite types...');
         const typesResponse = await axios.get(`http://localhost:3001/locations/${locationId}/campsitetype`);
-        console.log('[LocationDetailsPage] Campsite Types API Response:', JSON.parse(JSON.stringify(typesResponse.data)));
         this.campsiteTypes = typesResponse.data;
-        console.log('[LocationDetailsPage] After assigning campsite types - this.campsiteTypes:', JSON.parse(JSON.stringify(this.campsiteTypes)));
         
-        // Load reviews
         console.log('[LocationDetailsPage] Loading reviews...');
         await this.loadReviews();
 
-        // Load booked dates for this location
+        // Fetch booked dates (owner unavailabilities call removed)
+        console.log('[LocationDetailsPage] Starting to load booked dates...');
+        // await Promise.all([ // Promise.all removed as only one async call here now
+        //   this.loadBookedDates(locationId),
+        //   // this.loadOwnerUnavailabilities(locationId) // REMOVED
+        // ]);
         await this.loadBookedDates(locationId);
+        console.log('[LocationDetailsPage] Finished loading booked dates.');
         
-        // Load owner-set unavailabilities for this location
-        await this.loadOwnerUnavailabilities(locationId); // Added call
-        
-        // Prepare calendar attributes (highlights, popovers) after all date data is loaded
+        // Prepare calendar attributes AFTER all date data is loaded and processed
         this.prepareCalendarAttributes();
-
-        // Now check for conflicts with the dates potentially set from the query
+        
         this.checkInitialDateConflict();
         
-        // Check if user can review
         if (this.isAuthenticated) {
           console.log('[LocationDetailsPage] Checking if user can review...');
           await this.checkUserCanReview();
@@ -550,70 +538,34 @@ export default {
         // this.prepareCalendarAttributes(); // Removed from here
       } catch (error) {
         console.error('Error loading booked dates:', error);
-      }
-    },
-
-    async loadOwnerUnavailabilities(locationId) {
-      try {
-        const response = await axios.get(`http://localhost:3001/locations/${locationId}/unavailability`);
-        this.ownerUnavailabilities = response.data.map(item => ({
-          start: new Date(item.start_date),
-          end: new Date(item.end_date),
-          reason: item.reason, // Keep reason if needed for popover
-        }));
-        this.prepareCalendarAttributes(); // Call after both booked and unavailable dates are loaded
-      } catch (error) {
-        console.error('Error loading owner unavailabilities:', error);
+        this.bookedDates = [];
       }
     },
 
     prepareCalendarAttributes() {
       const attributes = [];
       
-      // Add highlights and popovers for booked dates
       this.bookedDates.forEach((range, index) => {
-        attributes.push({
-          key: `booked-${index}`,
-          highlight: {
-            color: 'red', // Or your preferred color for bookings
-            fillMode: 'light',
-          },
-          dates: range,
-          popover: {
-            label: 'Booked by a user.',
-            visibility: 'hover',
-          },
-          // Custom property to mark as disabled for selection logic if needed by v-calendar directly
-          // or to be combined into a single disabledDates array.
-          // For v-calendar, explicitly disabling dates is often done by passing an array of dates/ranges
-          // to a specific prop like `disabled-dates`.
-        });
+        if (range && range.start && range.end) {
+          attributes.push({
+            key: `booked-${index}`,
+            highlight: {
+              color: 'red',
+              fillMode: 'light',
+              style: {
+                opacity: 0.7, 
+              },
+            },
+            dates: { start: range.start, end: range.end },
+            popover: { label: 'Booked', visibility: 'hover' },
+          });
+        }
       });
 
-      // Add highlights and popovers for owner-set unavailable dates
-      this.ownerUnavailabilities.forEach((range, index) => {
-        attributes.push({
-          key: `unavailable-${index}`,
-          highlight: {
-            // Different style for owner unavailable dates
-            color: 'gray', 
-            fillMode: 'light',
-            // Example of using a pattern
-            // class: 'unavailable-pattern-bg', // You'd need to define this CSS class
-          },
-          dates: range,
-          popover: {
-            label: range.reason ? `Unavailable: ${range.reason}` : 'Marked as unavailable by owner.',
-            visibility: 'hover',
-          },
-        });
-      });
-
-      // The `allDisabledDatesForCalendar` computed property now handles the combination of
-      // booked dates and owner unavailabilities for the v-calendar's :disabled-dates prop.
-      // The `attributes` array is primarily for visual styling (highlights, popovers).
+      // ownerUnavailabilities.forEach loop REMOVED
 
       this.calendarAttributes = attributes;
+      // console.log('[LocationDetailsPage] Prepared calendarAttributes (booked only):', JSON.parse(JSON.stringify(this.calendarAttributes.map(attr => ({key: attr.key, dates: {start: attr.dates.start.toISOString().split('T')[0], end: attr.dates.end.toISOString().split('T')[0]}}))));
     },
 
     onDayClick(day) {
@@ -1299,16 +1251,18 @@ export default {
   background-color: #45a049; /* Darker green on hover */
 }
 
-/* Optional: Add a class for owner unavailable dates if using a pattern */
-/*
-.unavailable-pattern-bg {
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(0, 0, 0, 0.1),
-    rgba(0, 0, 0, 0.1) 10px,
-    rgba(0, 0, 0, 0.2) 10px,
-    rgba(0, 0, 0, 0.2) 20px
-  );
+/* Styles for v-calendar disabled dates */
+:deep(.vc-day.is-disabled) {
+  background-color: #e0e0e0 !important; /* Slightly darker grey for better visibility */
+  color: #a0a0a0 !important; /* Dimmer text color */
+  text-decoration: line-through !important;
+  pointer-events: none !important; /* Makes the day unclickable */
+  border-radius: 0 !important; /* Optional: remove rounded corners if they conflict */
 }
-*/
+
+/* Ensure highlights for booked/unavailable are still visible but disabled days override */
+/* This rule might be needed if highlights are somehow still showing on disabled days */
+:deep(.vc-day.is-disabled .vc-highlight) {
+  display: none !important; /* Hide highlights if the day itself is disabled */
+}
 </style>
