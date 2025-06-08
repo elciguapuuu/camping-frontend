@@ -903,8 +903,12 @@ export default {
 
 .bookings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); */ /* Changed for horizontal scroll */
+  grid-auto-flow: column; /* Lay out items in columns */
+  grid-auto-columns: minmax(280px, 1fr); /* Ensure cards have a minimum width */
   gap: 1.5rem;
+  overflow-x: auto; /* Enable horizontal scrolling */
+  padding-bottom: 1rem; /* Add some padding for the scrollbar */
 }
 
 .booking-card {
@@ -915,6 +919,7 @@ export default {
   display: flex;
   flex-direction: column;
   transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  min-width: 280px; /* Ensure cards don't get too squished */
 }
 .booking-card:hover {
   transform: translateY(-3px);
