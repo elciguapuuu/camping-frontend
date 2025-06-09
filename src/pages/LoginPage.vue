@@ -203,7 +203,7 @@ input {
 
 input:focus {
   outline: none;
-  border-color: #42b983;
+  border-color: #42b942;
 }
 
 input.invalid {
@@ -219,7 +219,7 @@ input.invalid {
 .primary-btn {
   width: 100%;
   padding: 14px;
-  background-color: #42b983;
+  background-color: #42b942;
   color: white;
   border: none;
   border-radius: 6px;
@@ -230,7 +230,7 @@ input.invalid {
 }
 
 .primary-btn:hover {
-  background-color: #3aa876;
+  background-color: #6bda6b;
 }
 
 .primary-btn:disabled {
@@ -293,7 +293,7 @@ input.invalid {
 }
 
 .auth-footer a {
-  color: #42b983;
+  color: #42b942;
   font-weight: 500;
   text-decoration: none;
 }

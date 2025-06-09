@@ -2,8 +2,8 @@
   <nav class="navbar">
     <div class="navbar-left">
       <router-link to="/" class="logo">
-        <!-- Your logo here -->
-        Seeker
+        <img src="@/assets/seekerlogo.png" alt="Seeker Logo" class="logo-img"/> 
+        <span>Seeker</span>
       </router-link>
     </div>
     
@@ -278,10 +278,22 @@ export default {
 }
 
 .logo {
+  display: flex; /* Added to align image and text */
+  align-items: center; /* Added to align image and text */
   font-size: 1.5rem;
   font-weight: 700;
-  color: #42b983;
+  color: #07cf21;
   text-decoration: none;
+}
+
+.logo-img {
+  height: 60px; /* Adjusted for better alignment */
+  margin-right: 8px; /* Increased spacing */
+  vertical-align: middle; /* Added for better vertical alignment */
+}
+
+.logo span { /* Assuming Seeker text is or can be wrapped in a span */
+  vertical-align: middle; /* Added for better vertical alignment */
 }
 
 .nav-link {
@@ -310,8 +322,8 @@ export default {
 
 .register-btn {
   background-color: transparent;
-  color: #42b983;
-  border: 1px solid #42b983;
+  color: #42b942;
+  border: 1px solid #42b942;
   padding: 8px 16px;
 }
 
@@ -320,7 +332,7 @@ export default {
 }
 
 .login-btn {
-  background-color: #42b983;
+  background-color: #42b942;
   color: white;
   padding: 8px 16px;
 }
