@@ -1,4 +1,4 @@
-# camping-app
+# Seeker - Frontend
 
 ## Project Overview
 This is the frontend for Seeker, a camping spot rental platform. It is built with Vue.js.
