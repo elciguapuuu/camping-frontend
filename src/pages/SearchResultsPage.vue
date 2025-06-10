@@ -473,16 +473,42 @@ export default {
         await this.loadLocationsData(this.results);
         
         // Calculate min/max price from results for the price slider
-        if (this.results.length > 0) {
-          const prices = this.results.map(loc => parseFloat(loc.price_per_night));
-          this.minMaxPrice.min = Math.floor(Math.min(...prices));
-          this.minMaxPrice.max = Math.ceil(Math.max(...prices));
-          this.maxPriceFilter = this.minMaxPrice.max; // Set slider to max initially
+        let newMinPrice = 0;
+        let newMaxPrice = 1000; // Default max price
 
-          // Update map price filter range as well
-          this.updateMapPriceSliderRange();
-          this.mapFilters.priceRange.max = this.minMaxPriceForMapFilter.max; // Set initial map price filter
+        if (this.results.length > 0) {
+          const prices = this.results.map(loc => parseFloat(loc.price_per_night)).filter(p => !isNaN(p));
+          if (prices.length > 0) {
+            newMinPrice = Math.floor(Math.min(...prices));
+            newMaxPrice = Math.ceil(Math.max(...prices));
+          }
         }
+
+        this.minMaxPrice.min = newMinPrice;
+        this.minMaxPrice.max = newMaxPrice;
+
+        if (this.$route.query.max_price !== undefined) {
+          // maxPriceFilter was set by initSearchFromUrlQuery from the URL.
+          // Clamp its current value (which came from URL, stored in this.maxPriceFilter) to the new actual range.
+          this.maxPriceFilter = Math.max(newMinPrice, Math.min(this.maxPriceFilter, newMaxPrice));
+        } else {
+          // No max_price in URL, so default the slider's current value to the max of available prices.
+          this.maxPriceFilter = newMaxPrice;
+        }
+
+        // Update map price filter range and its initial value
+        this.updateMapPriceSliderRange(); // Sets minMaxPriceForMapFilter and clamps mapFilters.priceRange.max based on its previous value
+
+        // Explicitly set the map's current price filter value based on the main filter's state
+        if (this.$route.query.max_price !== undefined) {
+            // If a price filter is active on the main page, map's filter should reflect it.
+            this.mapFilters.priceRange.max = this.maxPriceFilter; // Use the (clamped) value from main filter
+        } else {
+            // Otherwise, map filter uses its own full available range (max value).
+            this.mapFilters.priceRange.max = this.minMaxPriceForMapFilter.max;
+        }
+        // Ensure map's current filter value is also within its own slider's bounds
+        this.mapFilters.priceRange.max = Math.max(this.minMaxPriceForMapFilter.min, Math.min(this.mapFilters.priceRange.max, this.minMaxPriceForMapFilter.max));
         
         // Apply any existing filters to the results
         this.applyFilters();
