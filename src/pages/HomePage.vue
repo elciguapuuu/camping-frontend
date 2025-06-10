@@ -30,7 +30,10 @@
                   </div>
                 </template>
               </v-date-picker>
-              <input type="number" v-model.number="numberOfGuests" placeholder="Guests" class="search-input-field" min="1">
+              <div class="guests-input-container">
+                <img src="@/assets/person.png" alt="Guests" class="guests-icon">
+                <input type="number" v-model.number="numberOfGuests" placeholder="Guests" class="search-input-field guests-input-field" min="1">
+              </div>
               <button @click="searchLocations" class="search-btn">Search</button>
             </div>
           </div>
@@ -420,7 +423,7 @@ export default {
 
 .search-container {
   margin: 0 auto;
-  max-width: 700px;
+  max-width: 760px; /* Increased from 700px */
   background-color: white;
   border-radius: 4px;
   padding: 20px;
@@ -440,7 +443,8 @@ export default {
 
 .search-inputs input,
 .search-inputs .date-picker-wrapper .search-input-field, /* Target input inside v-date-picker */
-.search-inputs .date-picker-input-container input {
+.search-inputs .date-picker-input-container input,
+.search-inputs .guests-input-container .guests-input-field { /* Add guests input field */
   flex: 1;
   min-width: 120px; /* Ensure consistency */
   padding: 12px 15px;
@@ -449,9 +453,49 @@ export default {
   box-sizing: border-box; /* Add for better layout control */
 }
 
+/* Styles for the guests input container and icon */
+.guests-input-container {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding-left: 10px; /* Padding for the icon */
+  margin-left: 35px; /* Keep existing margin */
+  flex: 1; /* Allow it to take space like other inputs */
+  min-width: 150px; /* Adjust as needed */
+}
+
+.guests-icon {
+  width: 16px; /* Adjust size as needed */
+  height: 16px; /* Adjust size as needed */
+  margin-right: 8px; /* Space between icon and input */
+}
+
+.guests-input-container .guests-input-field {
+  border: none; /* Remove border from input as container has it */
+  padding-left: 0; /* Adjust padding as icon provides left space */
+  flex-grow: 1; /* Ensure input takes remaining space */
+  min-width: 60px; /* Prevent input from becoming too small */
+}
+
+/* Remove margin from the input itself as it's on the container now */
+.search-inputs > input[type="number"].search-input-field {
+  margin-left: 0; 
+}
+
+/* Added to increase margin for Check-out date input */
+.date-picker-input-container > input.date-picker-input:nth-of-type(2) {
+  margin-left: 15px; /* Increased margin */
+}
+
 .search-inputs .date-picker-wrapper {
   flex: 2; /* Allow wrapper to take more space for two inputs */
   min-width: 250px; /* Adjust as needed */
+}
+
+/* Added style for Checkout date input */
+.date-picker-input-container .date-picker-input:last-child {
+  margin-left: 10px; /* Additional margin to the left of checkout input, after separator */
 }
 
 .date-picker-input-container {
