@@ -4,7 +4,7 @@
 This is the frontend for Seeker, a camping spot rental platform. It is built with Vue.js.
 
 ## Installation
-To get a local copy up and running, follow these simple steps.
+To get a local copy up and running, follow these simple steps:
 
 1. **Install Vue CLI (if you haven't already)**:
    This project uses Vue CLI. If you don't have it installed, or want a specific version (e.g., 5.0.8), you can install or update it globally:
