@@ -30,6 +30,7 @@
                   </div>
                 </template>
               </v-date-picker>
+              <input type="number" v-model.number="numberOfGuests" placeholder="Guests" class="search-input-field" min="1">
               <button @click="searchLocations" class="search-btn">Search</button>
             </div>
           </div>
@@ -175,6 +176,7 @@ export default {
         start: null,
         end: null,
       },
+      numberOfGuests: 1, // Added for number of guests
       featuredLocations: [],
       recentlyAddedLocations: [],
       uniqueExperiences: [],
@@ -222,6 +224,12 @@ export default {
         this.dateRange = { start: null, end: null };
         // Optionally, notify user or log this situation
         console.warn('Invalid date range from query parameters.');
+      }
+    }
+    if (this.$route.query.guests) {
+      const guests = parseInt(this.$route.query.guests);
+      if (!isNaN(guests) && guests > 0) {
+        this.numberOfGuests = guests;
       }
     }
   },
@@ -340,6 +348,9 @@ export default {
         queryParams.start_date = formattedCheckIn;
         queryParams.end_date = formattedCheckOut;
       }
+      if (this.numberOfGuests && this.numberOfGuests > 0) {
+        queryParams.guests = this.numberOfGuests;
+      }
       this.$router.push({ 
         path: '/search', 
         query: queryParams
@@ -353,6 +364,9 @@ export default {
       if (this.dateRange && this.dateRange.start && this.dateRange.end) {
         query.start_date = this.formatDateToString(this.dateRange.start);
         query.end_date = this.formatDateToString(this.dateRange.end);
+      }
+      if (this.numberOfGuests && this.numberOfGuests > 0) {
+        query.guests = this.numberOfGuests;
       }
       return query;
     },

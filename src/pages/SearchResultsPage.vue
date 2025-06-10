@@ -24,6 +24,7 @@
             </div>
           </template>
         </v-date-picker>
+        <input type="number" v-model.number="numberOfGuests" placeholder="Guests" class="search-input-field" min="1" @change="updateFiltersInUrl">
         <button @click="searchLocations" class="search-btn">Search</button>
       </div>
     </div>
@@ -149,7 +150,14 @@
                 </div>
               </div>
               <p class="location-area">{{ location.city }}, {{ location.country }}</p>
-              <p class="location-price">€{{ location.price_per_night }} per night</p>
+              <p class="location-price">
+                <template v-if="typeof location.adjusted_price_per_night === 'number'">
+                  €{{ location.adjusted_price_per_night.toFixed(2) }} per night
+                </template>
+                <template v-else>
+                  Price not available
+                </template>
+              </p>
               
               <div class="campsite-types" v-if="location.campsiteTypes && location.campsiteTypes.length">
                 <span>Types: {{ location.campsiteTypes.map(type => type.name).join(', ') }}</span>
@@ -278,6 +286,7 @@ export default {
         start: null,
         end: null,
       },
+      numberOfGuests: 1, // Added for number of guests
       loading: true,
       results: [],
       filteredResults: [],
@@ -318,8 +327,10 @@ export default {
         );
       }
 
-      // Filter by max price
-      locationsToFilter = locationsToFilter.filter(loc => loc.price_per_night <= this.mapFilters.priceRange.max);
+      // Filter by max price - USE ADJUSTED PRICE
+      locationsToFilter = locationsToFilter.filter(loc => 
+        typeof loc.adjusted_price_per_night === 'number' && loc.adjusted_price_per_night <= this.mapFilters.priceRange.max
+      );
       
       // Filter by campsite types
       if (this.mapFilters.selectedCampsiteTypes.length > 0) {
@@ -419,6 +430,19 @@ export default {
       } else {
         this.dateRange = { start: null, end: null };
       }
+
+      // Initialize numberOfGuests from query
+      if (query.guests) {
+        const guests = parseInt(query.guests, 10);
+        if (!isNaN(guests) && guests > 0) {
+          this.numberOfGuests = guests;
+        } else {
+          this.numberOfGuests = 1; // Default if invalid
+        }
+      } else {
+        this.numberOfGuests = 1; // Default if not provided
+      }
+
       // Initialize filters from query if they exist
       if (query.types) {
         this.selectedCampsiteTypes = query.types.split(',').map(id => parseInt(id, 10));
@@ -469,15 +493,16 @@ export default {
         
         console.log('Search results:', this.results);
         
-        // Load additional data for each location
+        // Load additional data for each location (this will now also calculate adjusted_price_per_night)
         await this.loadLocationsData(this.results);
+        console.log('Results after loadLocationsData (with adjusted_price_per_night):', JSON.parse(JSON.stringify(this.results))); // Added log
         
-        // Calculate min/max price from results for the price slider
+        // Calculate min/max price from results for the price slider - USE ADJUSTED PRICE
         let newMinPrice = 0;
         let newMaxPrice = 1000; // Default max price
 
         if (this.results.length > 0) {
-          const prices = this.results.map(loc => parseFloat(loc.price_per_night)).filter(p => !isNaN(p));
+          const prices = this.results.map(loc => parseFloat(loc.adjusted_price_per_night)).filter(p => !isNaN(p));
           if (prices.length > 0) {
             newMinPrice = Math.floor(Math.min(...prices));
             newMaxPrice = Math.ceil(Math.max(...prices));
@@ -501,11 +526,11 @@ export default {
 
         // Explicitly set the map's current price filter value based on the main filter's state
         if (this.$route.query.max_price !== undefined) {
-            // If a price filter is active on the main page, map's filter should reflect it.
-            this.mapFilters.priceRange.max = this.maxPriceFilter; // Use the (clamped) value from main filter
+          // If a price filter is active on the main page, map's filter should reflect it.
+          this.mapFilters.priceRange.max = this.maxPriceFilter; // Use the (clamped) value from main filter
         } else {
-            // Otherwise, map filter uses its own full available range (max value).
-            this.mapFilters.priceRange.max = this.minMaxPriceForMapFilter.max;
+          // Otherwise, map filter uses its own full available range (max value).
+          this.mapFilters.priceRange.max = this.minMaxPriceForMapFilter.max;
         }
         // Ensure map's current filter value is also within its own slider's bounds
         this.mapFilters.priceRange.max = Math.max(this.minMaxPriceForMapFilter.min, Math.min(this.mapFilters.priceRange.max, this.minMaxPriceForMapFilter.max));
@@ -532,6 +557,10 @@ export default {
       if (this.dateRange && this.dateRange.start && this.dateRange.end) {
         queryParams.start_date = this.formatDateToString(this.dateRange.start);
         queryParams.end_date = this.formatDateToString(this.dateRange.end);
+      }
+      // Add numberOfGuests to queryParams
+      if (this.numberOfGuests > 0) {
+        queryParams.guests = this.numberOfGuests.toString();
       }
       // Persist filters in URL
       if (this.selectedCampsiteTypes.length > 0) {
@@ -601,14 +630,19 @@ export default {
         delete queryParams.max_price; // Remove if it's the default max value or if max is 0
       }
 
+      // Add/update guests parameter
+      if (this.numberOfGuests > 0 && this.numberOfGuests !== 1) { // Only add if not default (1) or 0
+        queryParams.guests = this.numberOfGuests.toString();
+      } else {
+        delete queryParams.guests; // Remove if default (1) or invalid
+      }
+
       this.$router.push({ path: '/search', query: queryParams }).catch(err => {
         if (err.name !== 'NavigationDuplicated') {
           console.error(err);
         }
       });
-    },
-
-    getCurrentSearchParamsForDetails() {
+    },    getCurrentSearchParamsForDetails() {
       const query = {};
       // Use 'query' if available (from this page's search bar), otherwise 'search_query' (passed from home)
       const locationQuery = this.$route.query.query || this.$route.query.search_query;
@@ -618,6 +652,10 @@ export default {
       if (this.$route.query.start_date && this.$route.query.end_date) {
         query.start_date = this.$route.query.start_date;
         query.end_date = this.$route.query.end_date;
+      }
+      // Add guests to query if present in current route query
+      if (this.$route.query.guests) {
+        query.guests = this.$route.query.guests;
       }
       return query;
     },
@@ -689,13 +727,19 @@ export default {
             this.$set(location, 'reviewsCount', 0); 
           }
 
-          // Remove fetching all reviews just for count and first review rating, use average endpoint data
-          // this.$set(location, 'firstReviewRating', null); // No longer primarily used for display rating
-          // this.$set(location, 'allReviews', []); // Still can be fetched if needed for other purposes on demand
+          // Calculate and set adjusted_price_per_night
+          const basePrice = parseFloat(location.price_per_night);
+          const numGuests = parseInt(this.numberOfGuests, 10);
 
-          // The block for fetching all reviews from `http://localhost:3001/reviews/${location.location_id}`
-          // can be removed or modified if `allReviews` are not needed for other display purposes on this card.
-          // For now, we'll assume the averageRating and reviewsCount from the /average endpoint are sufficient for the card.
+          if (!isNaN(basePrice) && !isNaN(numGuests) && numGuests > 0) {
+            this.$set(location, 'adjusted_price_per_night', basePrice * numGuests);
+          } else if (!isNaN(basePrice)) {
+            // If guests are invalid (e.g., 0 or NaN), but base price is valid, use base price
+            this.$set(location, 'adjusted_price_per_night', basePrice);
+          } else {
+            // If base price is invalid (e.g., null or not a number), set adjusted price to null
+            this.$set(location, 'adjusted_price_per_night', null);
+          }
 
         } catch (error) {
           console.error(`Error loading data for location ${location.location_id}:`, error);
@@ -706,6 +750,16 @@ export default {
           if (typeof location.reviewsCount === 'undefined') {
             this.$set(location, 'reviewsCount', 0);
           }
+          // Ensure adjusted_price_per_night is set even on error
+          if (typeof location.adjusted_price_per_night === 'undefined') {
+            if (location.price_per_night) {
+              const basePriceOnError = parseFloat(location.price_per_night);
+              this.$set(location, 'adjusted_price_per_night', !isNaN(basePriceOnError) ? basePriceOnError : null);
+            } else {
+              // If price_per_night itself is missing or invalid, set adjusted to null
+              this.$set(location, 'adjusted_price_per_night', null);
+            }
+          }
         }
       }));
     },
@@ -713,9 +767,12 @@ export default {
     // applyFilters() { // This is the original applyFilters that processes the actual filtering logic
     applyFilters() {
       this.filteredResults = this.results.filter(location => {
-        // Price filter
-        const price = parseFloat(location.price_per_night);
-        if (price > this.maxPriceFilter) {
+        // Price filter - USE ADJUSTED PRICE
+        const adjustedPrice = parseFloat(location.adjusted_price_per_night);
+        // Ensure maxPriceFilter is a number for comparison
+        const maxFilterPrice = parseFloat(this.maxPriceFilter);
+
+        if (!isNaN(adjustedPrice) && !isNaN(maxFilterPrice) && adjustedPrice > maxFilterPrice) {
           return false;
         }
         
@@ -764,6 +821,7 @@ export default {
         
         return true;
       });
+      console.log('Filtered results (for card display):', JSON.parse(JSON.stringify(this.filteredResults))); // Added log
     },
     
     getCampsiteTypesList(location) {
@@ -862,7 +920,8 @@ export default {
     },
     updateMapPriceSliderRange() {
       if (this.results.length > 0) {
-        const prices = this.results.map(loc => parseFloat(loc.price_per_night)).filter(p => !isNaN(p));
+        // Use adjusted_price_per_night for map price range calculation
+        const prices = this.results.map(loc => parseFloat(loc.adjusted_price_per_night)).filter(p => !isNaN(p));
         if (prices.length > 0) {
           this.minMaxPriceForMapFilter.min = Math.floor(Math.min(...prices));
           this.minMaxPriceForMapFilter.max = Math.ceil(Math.max(...prices));

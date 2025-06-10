@@ -153,6 +153,21 @@
             </div>
 
             <div class="form-group">
+              <label for="max_guests">Maximum Guests per Booking*</label>
+              <input 
+                type="number" 
+                id="max_guests" 
+                v-model.number="location.max_guests" 
+                placeholder="e.g., 4"
+                min="1"
+                step="1"
+                required
+              >
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
               <label for="service_fee_percentage">Service Fee (%)*</label>
               <input 
                 type="number" 
@@ -280,6 +295,7 @@
               <h4>{{ location.name }}</h4>
               <p class="location-area">{{ location.city }}, {{ location.country }}</p>
               <p class="location-price"><strong>Price:</strong> €{{ location.price_per_night ? location.price_per_night.toFixed(2) : 'N/A' }} / night</p>
+              <p class="location-max-guests"><strong>Max Guests:</strong> {{ location.max_guests ? location.max_guests : 'N/A' }}</p>
               <p class="location-fee"><strong>Service Fee:</strong> {{ location.service_fee_percentage !== undefined ? location.service_fee_percentage.toFixed(2) : 'N/A' }}%</p>
               <p class="location-policy"><strong>Policy:</strong> {{ location.booking_policy ? (location.booking_policy.substring(0, 50) + '...') : 'Not set' }}</p>
               <div class="location-rating-summary" v-if="location.total_reviews > 0">
@@ -364,6 +380,7 @@ export default {
         city: '',
         country: '',
         price_per_night: null,
+        max_guests: null, // Added max_guests
         booking_policy: '',
         service_fee_percentage: 10.00,
         amenities: [],
@@ -469,6 +486,7 @@ export default {
           return {
             ...loc,
             price_per_night: loc.price_per_night !== undefined ? parseFloat(loc.price_per_night) : 0,
+            max_guests: loc.max_guests !== undefined ? parseInt(loc.max_guests) : null, // Added max_guests
             booking_policy: loc.booking_policy || '', // Added
             service_fee_percentage: loc.service_fee_percentage !== undefined ? parseFloat(loc.service_fee_percentage) : 10.00, // Added
             average_rating: loc.average_rating !== undefined ? parseFloat(loc.average_rating) : 0,
@@ -799,6 +817,7 @@ export default {
         city: '',
         country: '',
         price_per_night: null,
+        max_guests: null, // Added max_guests
         booking_policy: '', // Added
         service_fee_percentage: 10.00, // Added
         amenities: [],
@@ -835,6 +854,7 @@ export default {
 
       // Ensure numeric values are numbers, not strings, if they come from JSON.parse
       this.location.price_per_night = parseFloat(locationToEdit.price_per_night) || null;
+      this.location.max_guests = locationToEdit.max_guests ? parseInt(locationToEdit.max_guests) : null; // Added max_guests
       this.location.latitude = parseFloat(locationToEdit.latitude) || null;
       this.location.longitude = parseFloat(locationToEdit.longitude) || null;
       this.location.service_fee_percentage = parseFloat(locationToEdit.service_fee_percentage) || 10.00;

@@ -86,7 +86,10 @@
         <div class="booking-card">
           <div class="booking-card-content">
             <div class="booking-price">
-              <span class="price-amount">€{{ location.price_per_night }}</span> night
+              <!-- Display adjusted_price_per_night if available, else base price -->
+              <span class="price-amount">
+                €{{ location.adjusted_price_per_night !== null ? location.adjusted_price_per_night.toFixed(2) : parseFloat(location.price_per_night).toFixed(2) }}
+              </span> night
             </div>
             
             <!-- Date Conflict Message -->
@@ -126,8 +129,22 @@
                 </template>
               </v-date-picker>
             </div>
+
+            <!-- Number of Guests Input -->
+            <div class="booking-guests">
+              <label for="numberOfGuestsInput" class="guest-label">Number of Guests (Max: {{ location.max_guests || 'N/A' }}):</label>
+              <input 
+                type="number" 
+                id="numberOfGuestsInput" 
+                v-model.number="numberOfGuests" 
+                min="1" 
+                :max="location.max_guests || undefined" 
+                @change="handleGuestOrDateChange" 
+                class="guest-input-field"
+              />
+            </div>
             
-            <button @click="startBooking" class="booking-btn" :disabled="!dateRange.start || !dateRange.end">
+            <button @click="startBooking" class="booking-btn" :disabled="!dateRange.start || !dateRange.end || numberOfGuests <= 0">
               Book Now
             </button>
             
@@ -135,9 +152,10 @@
               You won't be charged yet
             </div>
             
-            <div class="booking-breakdown" v-if="dateRange.start && dateRange.end">
+            <div class="booking-breakdown" v-if="dateRange.start && dateRange.end && numberOfGuests > 0">
               <div class="breakdown-item">
-                <span>€{{ location.price_per_night }} x {{ nights }} nights</span>
+                <!-- Use adjusted price for breakdown -->
+                <span>€{{ location.adjusted_price_per_night ? location.adjusted_price_per_night.toFixed(2) : '0.00' }} x {{ nights }} nights</span>
                 <span>€{{ totalPrice }}</span>
               </div>
               <div class="breakdown-total">
@@ -268,6 +286,7 @@ export default {
         name: '',
         description: '',
         price_per_night: 0,
+        adjusted_price_per_night: null, 
         address: '',
         city: '',
         country: '',
@@ -276,7 +295,8 @@ export default {
         owner_id: null,
         owner_name: '',
         average_rating: 0,
-        total_reviews: 0
+        total_reviews: 0,
+        max_guests: null // Added max_guests
       },
       images: [],
       currentImage: null,
@@ -289,6 +309,7 @@ export default {
         start: null,
         end: null,
       },
+      numberOfGuests: 1, // Added for number of guests
       bookedDates: [],
       calendarAttributes: [],
       isAuthenticated: false,
@@ -318,7 +339,15 @@ export default {
       return diffDays;
     },
     totalPrice() {
-      return (this.nights * parseFloat(this.location.price_per_night)).toFixed(2);
+      const adjustedPrice = this.location.adjusted_price_per_night;
+      const numNights = this.nights; // nights() computed prop already handles invalid dateRange
+
+      if (adjustedPrice === null || isNaN(adjustedPrice) || adjustedPrice < 0 || numNights <= 0) {
+        // Allow adjustedPrice to be 0 if basePrice is 0
+        // If nights is 0 or adjustedPrice is invalid (null, NaN, negative), total is 0.00
+        return '0.00';
+      }
+      return (adjustedPrice * numNights).toFixed(2);
     },
     // Computed properties to use location's average_rating and total_reviews
     averageRating() {
@@ -380,8 +409,10 @@ export default {
       }
     },
     
-    initializeDatesFromQuery() {
+    initializeDatesAndGuestsFromQuery() { 
       const query = this.$route.query;
+      console.log('[LDP] initializeDatesAndGuestsFromQuery: route query.guests =', query.guests);
+      // Date initialization
       if (query.start_date && query.end_date) {
         const startDate = new Date(query.start_date + 'T00:00:00');
         const endDate = new Date(query.end_date + 'T00:00:00');
@@ -395,6 +426,21 @@ export default {
       } else {
         console.log('[LocationDetailsPage] No start_date/end_date in query for date picker initialization.');
       }
+
+      // Guest initialization
+      if (query.guests) {
+        const guestsFromQuery = parseInt(query.guests, 10);
+        if (!isNaN(guestsFromQuery) && guestsFromQuery > 0) {
+          this.numberOfGuests = guestsFromQuery;
+        } else {
+          console.warn(`[LDP] initializeDatesAndGuestsFromQuery: Invalid guests in query ('${query.guests}'). Defaulting to 1.`);
+          this.numberOfGuests = 1; 
+        }
+      } else {
+        this.numberOfGuests = 1; // Default if not provided
+        console.log('[LDP] initializeDatesAndGuestsFromQuery: No guests in query. Defaulting to 1.');
+      }
+      console.log(`[LDP] initializeDatesAndGuestsFromQuery: this.numberOfGuests set to = ${this.numberOfGuests} (type: ${typeof this.numberOfGuests})`);
     },
 
     checkInitialDateConflict() {
@@ -403,11 +449,9 @@ export default {
         return;
       }
 
-      const selectedStart = new Date(this.dateRange.start); // Ensure it's a Date object
-      const selectedEnd = new Date(this.dateRange.end);     // Ensure it's a Date object
+      const selectedStart = new Date(this.dateRange.start); 
+      const selectedEnd = new Date(this.dateRange.end);     
 
-      // Ensure allDisabledDatesForCalendar is populated by calling prepareCalendarAttributes if it hasn't run yet
-      // This might be redundant if loadLocationDetails ensures correct order, but good for safety.
       if (this.calendarAttributes.length === 0 && (this.bookedDates.length > 0)) {
         this.prepareCalendarAttributes();
       }
@@ -416,36 +460,77 @@ export default {
         const disabledStart = new Date(disabledPeriod.start);
         const disabledEnd = new Date(disabledPeriod.end);
 
-        // Check for overlap: (StartA < EndB) and (EndA > StartB)
-        // For date ranges, we usually consider them inclusive at the start and exclusive at the end for day-based bookings,
-        // or inclusive for both if dealing with full days. v-calendar's disabled-dates usually means the whole day.
-        // Let's assume disabled dates are inclusive ranges of days.
-        // A conflict exists if the selected range (inclusive start, inclusive end) overlaps any part of a disabled range.
         if (selectedStart <= disabledEnd && selectedEnd >= disabledStart) {
           const formattedQueryStart = this.formatDateToString(selectedStart);
           const formattedQueryEnd = this.formatDateToString(selectedEnd);
           this.dateConflictMessage = `The dates (${formattedQueryStart} to ${formattedQueryEnd}) you selected from your previous search are not available for this location. Please choose different dates.`;
           console.warn('[LocationDetailsPage] Date conflict detected with query dates:', this.dateRange, 'and disabled period:', disabledPeriod);
-          return; // Found a conflict, no need to check further
+          return; 
         }
       }
       this.dateConflictMessage = null; // No conflicts found
       console.log('[LocationDetailsPage] No date conflicts found for query dates:', this.dateRange);
     },
-    
+
+    handleGuestOrDateChange() {
+      // Ensure numberOfGuests does not exceed max_guests
+      if (this.location.max_guests && this.numberOfGuests > this.location.max_guests) {
+        this.numberOfGuests = this.location.max_guests;
+      }
+      // Ensure numberOfGuests is at least 1
+      if (this.numberOfGuests < 1) {
+        this.numberOfGuests = 1;
+      }
+      console.log(`[LDP] handleGuestOrDateChange: this.numberOfGuests BEFORE calculateAdjustedPrice = ${this.numberOfGuests} (type: ${typeof this.numberOfGuests})`);
+      this.calculateAdjustedPrice();
+      console.log(`[LDP] handleGuestOrDateChange: this.numberOfGuests AFTER calculateAdjustedPrice = ${this.numberOfGuests} (type: ${typeof this.numberOfGuests})`);
+    },
+
+    calculateAdjustedPrice() {
+      const basePrice = parseFloat(this.location.price_per_night);
+      const numGuests = parseInt(this.numberOfGuests, 10);
+      let newAdjustedPrice = null;
+
+      if (isNaN(basePrice) || basePrice < 0) { // Allow basePrice to be 0
+        this.location = { ...this.location, adjusted_price_per_night: null };
+        // console.log('[LDP] calculateAdjustedPrice: Invalid basePrice, adjusted_price_per_night set to null');
+        return;
+      }
+
+      if (isNaN(numGuests) || numGuests <= 0) {
+        // If guests are invalid or 0, calculate price for 1 guest as a default behavior
+        newAdjustedPrice = basePrice;
+        // console.log(`[LDP] calculateAdjustedPrice: Invalid numGuests (${this.numberOfGuests}), defaulting to basePrice for 1 guest: ${newAdjustedPrice}`);
+      } else if (numGuests === 1) {
+        newAdjustedPrice = basePrice;
+        // console.log(`[LDP] calculateAdjustedPrice: numGuests is 1, newAdjustedPrice is basePrice: ${newAdjustedPrice}`);
+      } else { // numGuests > 1
+        newAdjustedPrice = basePrice + (numGuests - 1) * basePrice * 0.45;
+        // console.log(`[LDP] calculateAdjustedPrice: numGuests is ${numGuests}, newAdjustedPrice with surcharge: ${newAdjustedPrice}`);
+      }
+      
+      this.location = { 
+        ...this.location, 
+        adjusted_price_per_night: newAdjustedPrice !== null ? parseFloat(newAdjustedPrice.toFixed(2)) : null
+      };
+      // console.log('[LDP] calculateAdjustedPrice: Final this.location.adjusted_price_per_night =', this.location.adjusted_price_per_night);
+    },
+
     async loadLocationDetails() {
       console.log('[LocationDetailsPage] loadLocationDetails started. Location ID:', this.$route.params.id);
       try {
         this.isLoading = true;
         const locationId = this.$route.params.id;
         
-        this.initializeDatesFromQuery();
+        this.initializeDatesAndGuestsFromQuery(); // Updated to include guests
         
         console.log('[LocationDetailsPage] Fetching location details...');
         const locationResponse = await axios.get(`http://localhost:3001/locations/${locationId}`);
         console.log('[LocationDetailsPage] Location details response:', JSON.parse(JSON.stringify(locationResponse.data)));
         this.location = locationResponse.data;
         
+        this.calculateAdjustedPrice(); // Calculate adjusted price after location data is loaded
+
         if (this.location.owner_id) {
           try {
             console.log('[LocationDetailsPage] Fetching owner information for owner_id:', this.location.owner_id);
@@ -529,16 +614,31 @@ export default {
     
     async loadBookedDates(locationId) {
       try {
-        const response = await axios.get(`http://localhost:3001/bookings/location/${locationId}/booked-dates`);
+        const config = {};
+        if (this.isAuthenticated) {
+          const token = localStorage.getItem('token');
+          if (token) {
+            config.headers = { Authorization: `Bearer ${token}` };
+          } else {
+            console.warn('[LocationDetailsPage] User is authenticated but token is missing for loadBookedDates.');
+            // Not throwing an error here, to see if backend allows unauthenticated or if 401 is solely due to missing token
+          }
+        }
+        // If not authenticated, or token is missing, request goes without Authorization header.
+        // Backend will return 401 if it's required and not provided.
+
+        const response = await axios.get(`http://localhost:3001/bookings/location/${locationId}/booked-dates`, config);
         this.bookedDates = response.data.map(dateRange => ({
           start: new Date(dateRange.start_date),
           end: new Date(dateRange.end_date),
         }));
-        // We will call prepareCalendarAttributes once both bookedDates and ownerUnavailabilities are loaded
-        // this.prepareCalendarAttributes(); // Removed from here
       } catch (error) {
         console.error('Error loading booked dates:', error);
-        this.bookedDates = [];
+        this.bookedDates = []; // Reset on error
+        if (error.response && error.response.status === 401) {
+          console.warn('[LocationDetailsPage] Unauthorized to load booked dates. User might need to log in again or token is invalid.');
+          // Consider further actions like redirecting to login or clearing auth state if this persists
+        }
       }
     },
 
@@ -705,35 +805,36 @@ export default {
     },
 
     startBooking() {
-      if (!this.isAuthenticated) {
-        this.$router.push({ name: 'LoginPage', query: { redirect: this.$route.fullPath } });
+      if (!this.dateRange.start || !this.dateRange.end) {
+        alert('Please select check-in and check-out dates.');
         return;
       }
-      if (!this.dateRange.start || !this.dateRange.end || this.nights <= 0) {
-        this.errorMessage = 'Please select valid check-in and check-out dates.';
-        setTimeout(() => { this.errorMessage = null; }, 3000);
-        return;
-      }
-      // If there's a conflict message from pre-filled dates, prevent booking
       if (this.dateConflictMessage) {
-        alert(this.dateConflictMessage); // Alert the user about the conflict
+        alert(this.dateConflictMessage); 
         return;
       }
-      // Proceed to booking page
+
+      const numGuests = parseInt(this.numberOfGuests, 10);
+      if (isNaN(numGuests) || numGuests <= 0) {
+        alert('Please enter a valid number of guests.');
+        return;
+      }
+
+      // Ensure adjusted_price_per_night is up-to-date before booking
+      this.calculateAdjustedPrice(); 
+
       this.$router.push({
-        name: 'PurchaseBookingPage',
+        name: 'PurchaseBookingPage', 
         params: { locationId: this.location.location_id },
         query: {
-          checkIn: this.formatDateToString(this.dateRange.start),
-          checkOut: this.formatDateToString(this.dateRange.end),
-          nights: this.nights,
-          totalPrice: this.totalPrice,
-          locationName: this.location.name,
-          pricePerNight: this.location.price_per_night
+          start_date: this.formatDateToString(this.dateRange.start),
+          end_date: this.formatDateToString(this.dateRange.end),
+          guests: this.numberOfGuests, 
+          price_per_night: this.location.price_per_night, // Base price per night for one guest
+          total_price: this.totalPrice // Total calculated price for all guests and nights
         }
       });
     },
-    
     formatDate(dateString) {
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
       return new Date(dateString).toLocaleDateString(undefined, options);

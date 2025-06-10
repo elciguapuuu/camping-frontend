@@ -72,6 +72,14 @@
             </div>
 
             <div class="form-section">
+                <h3 class="section-title">Guest Information</h3>
+                <div class="form-group">
+                    <label for="guests">Number of Guests:</label>
+                    <input type="number" id="guests" v-model.number="numberOfGuests" class="form-control-plaintext" readonly>
+                </div>
+            </div>
+
+            <div class="form-section">
               <h3 class="section-title">Payment Method</h3>
               <div class="payment-options">
                 <div class="payment-option">
@@ -127,7 +135,16 @@
           
           <div class="price-breakdown">
             <div class="price-item">
-              <span>€{{ location.price_per_night }} × {{ nights }} nights</span>
+              <!-- Display logic based on available data -->
+              <span v-if="basePricePerNightFromQuery > 0 && numberOfGuests > 0">
+                €{{ basePricePerNightFromQuery.toFixed(2) }} × {{ nights }} nights × {{ numberOfGuests }} guest(s)
+              </span>
+              <span v-else-if="location.price_per_night > 0"> <!-- Fallback to location's general price if specific query price is not available -->
+                €{{ location.price_per_night.toFixed(2) }} × {{ nights }} nights
+              </span>
+              <span v-else>
+                Price details unavailable
+              </span>
               <span>€{{ totalPrice.toFixed(2) }}</span>
             </div>
             
@@ -194,12 +211,15 @@ export default {
         name: '',
         city: '',
         country: '',
-        price_per_night: 0,
+        price_per_night: 0, // This will store the original location base price, might not be used for calculation if query provides specific base
         coverImage: null,
         campsiteTypes: [],
-        booking_policy: '', // Added
-        service_fee_percentage: 0 // Added (will be fetched)
+        booking_policy: '', 
+        service_fee_percentage: 0 
       },
+      numberOfGuests: 1, // Initialize, will be updated from query
+      basePricePerNightFromQuery: 0, // Price per night for ONE guest, from query
+      totalPriceFromQuery: 0, // Pre-calculated total (base * nights * guests), from query
       // booking: { // Old booking data structure
       //   startDate: '',
       //   endDate: '',
@@ -240,15 +260,29 @@ export default {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays;
     },
-    // ... totalPrice, serviceFee, finalTotal remain largely the same, using this.nights ...
+    
+    // This 'totalPrice' will be the subtotal based on guests, before service fee.
+    // It should primarily come from totalPriceFromQuery if available and valid.
     totalPrice() {
-      return this.location.price_per_night * this.nights;
+      // If totalPriceFromQuery is available (passed from previous page), use it directly.
+      // This ensures consistency with what the user saw.
+      if (this.totalPriceFromQuery > 0 && this.nights > 0) {
+        // We might also want to verify if this.totalPriceFromQuery matches
+        // this.basePricePerNightFromQuery * this.nights * this.numberOfGuests
+        // For now, trust the passed value if nights > 0
+        return this.totalPriceFromQuery;
+      }
+      // Fallback calculation if not passed or if nights is 0 (which would make totalPriceFromQuery irrelevant)
+      if (this.basePricePerNightFromQuery > 0 && this.numberOfGuests > 0 && this.nights > 0) {
+        return this.basePricePerNightFromQuery * this.nights * this.numberOfGuests;
+      }
+      return 0;
     },
     serviceFee() {
-      if (this.location.service_fee_percentage > 0) {
-        return this.totalPrice * (this.location.service_fee_percentage / 100);
-      }
-      return this.totalPrice * 0.10; 
+      const feePercentage = (this.location.service_fee_percentage > 0) 
+                            ? (this.location.service_fee_percentage / 100) 
+                            : 0.10; // Default 10%
+      return this.totalPrice * feePercentage;
     },
     finalTotal() {
       return this.totalPrice + this.serviceFee;
@@ -267,39 +301,35 @@ export default {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Normalize today to the beginning of the day
 
-      // Check 1: Start date must not be in the past.
       if (startDate < today) {
         return true;
       }
 
-      // Check 2: End date must be strictly after the start date.
-      // (i.e., booking must be for at least one night)
       if (endDate <= startDate) {
         return true;
       }
       
-      // If all checks pass, the dates are valid.
       return false;
     }
   },
   watch: {
-    paymentMethod(newValue) { // Changed from 'booking.paymentMethod'
+    paymentMethod(newValue) {
       if (newValue === 'pay-now') {
         this.initializeStripeAndElements();
       } else {
         this.destroyCardElement();
       }
     },
-    '$route.query': { // Watch for changes in route query parameters
-      immediate: true, // Run the handler immediately on component creation
+    '$route.query': {
+      immediate: true,
       handler(newQuery) {
-        this.initializeBookingDatesFromQuery(newQuery);
+        this.initializeBookingDetailsFromQuery(newQuery); // Changed method name for clarity
       }
     }
   },
   created() {
-    this.loadLocationData(); // This will also call initializeBookingDates
-    // initializeBookingDates is now called within loadLocationData or after its successful completion
+    this.loadLocationData(); 
+    // initializeBookingDetailsFromQuery is called by the watcher now
   },
   methods: {
     formatDateForPicker(dateString) { // Helper to convert YYYY-MM-DD to Date object
@@ -331,40 +361,69 @@ export default {
         
         return `${year}-${month}-${day}`;
     },
-    initializeBookingDatesFromQuery(query) {
-      const { checkIn, checkOut, nights: queryNights } = query;
+    initializeBookingDetailsFromQuery(query) { // Renamed and expanded
+      const { 
+        checkIn, 
+        checkOut, 
+        nights: queryNights, 
+        guests, 
+        price_per_night: queryPricePerNight, 
+        total_price: queryTotalPrice 
+      } = query;
+
+      // Initialize guests
+      this.numberOfGuests = guests ? parseInt(guests, 10) : 1;
+      if (isNaN(this.numberOfGuests) || this.numberOfGuests < 1) {
+        this.numberOfGuests = 1; // Default to 1 if invalid
+      }
+
+      // Initialize base price per night (for one guest) from query
+      this.basePricePerNightFromQuery = queryPricePerNight ? parseFloat(queryPricePerNight) : 0;
+      if (isNaN(this.basePricePerNightFromQuery) || this.basePricePerNightFromQuery < 0) {
+        this.basePricePerNightFromQuery = 0; 
+      }
+      
+      // Initialize total price from query (base * nights * guests)
+      // This is the subtotal before service fees.
+      this.totalPriceFromQuery = queryTotalPrice ? parseFloat(queryTotalPrice) : 0;
+       if (isNaN(this.totalPriceFromQuery) || this.totalPriceFromQuery < 0) {
+        this.totalPriceFromQuery = 0;
+      }
+
+      // Date initialization logic (remains largely the same)
       const today = new Date();
-      today.setHours(0,0,0,0); // Normalize today to start of day
+      today.setHours(0,0,0,0);
 
       let startDate = checkIn ? this.formatDateForPicker(checkIn) : null;
-      // If checkIn date is in the past or invalid, default to today
       if (startDate && startDate < today) startDate = today; 
-      else if (!startDate) startDate = today; // Default to today if not provided or invalid
+      else if (!startDate) startDate = today;
       
       let endDate = checkOut ? this.formatDateForPicker(checkOut) : null;
 
-      // Logic to derive end date if only start date and nights are provided
       if (startDate && !endDate && queryNights) {
         endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + (parseInt(queryNights) || 1));
       } else if (startDate && endDate && endDate <= startDate) {
-         // Ensure end date is after start date
          endDate = new Date(startDate);
-         endDate.setDate(startDate.getDate() + 1); // Default to one day after start
-      } else if (startDate && !endDate) { // Default end date if not provided from query
+         endDate.setDate(startDate.getDate() + 1);
+      } else if (startDate && !endDate) {
         endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 1); // Default to one day after start
+        endDate.setDate(startDate.getDate() + 1);
       }
       
       this.dateRange = {
         start: startDate,
         end: endDate
       };
-      
-      // Optional: Update location details from query if they were passed and are reliable
-      // const { locationName, pricePerNight } = query;
-      // if (locationName) this.location.name = locationName;
-      // if (pricePerNight) this.location.price_per_night = parseFloat(pricePerNight);
+
+      // If location.price_per_night is intended to be the base price for one guest,
+      // update it here. Otherwise, basePricePerNightFromQuery is the source.
+      // For now, let's assume basePricePerNightFromQuery is the primary source for display calculations.
+      // If the fetched location.price_per_night from API is different, it might be a general price.
+      // We will use basePricePerNightFromQuery for the breakdown.
+      console.log('Query Guests:', this.numberOfGuests);
+      console.log('Query Base Price/Night:', this.basePricePerNightFromQuery);
+      console.log('Query Total Price (subtotal):', this.totalPriceFromQuery);
     },
     // updateEndDate is no longer needed as v-calendar handles range selection.
     
@@ -394,7 +453,7 @@ export default {
                                     : 10
         };
         // Initialize dates *after* location data is loaded, using query params
-        this.initializeBookingDatesFromQuery(this.$route.query); // Ensure dates are set from query
+        this.initializeBookingDetailsFromQuery(this.$route.query); // Ensure dates are set from query
         await this.loadLocationSubDetails(locationId); // For images, types etc.
       } catch (error) {
         console.error('Error loading location data:', error);
@@ -528,73 +587,135 @@ export default {
     },
 
     async handleBooking() {
+      this.isSubmitting = true;
+      this.stripeError = ''; 
+
       if (this.invalidDates) {
-        this.errorMessage = "Please select a valid date range.";
-        setTimeout(() => this.errorMessage = '', 3000);
+        this.errorMessage = 'Please select valid dates.';
+        this.isSubmitting = false;
         return;
       }
-      // ... (rest of isSubmitting, token check) ...
-      this.isSubmitting = true;
-      this.errorMessage = '';
-      this.stripeError = '';
-      
       const token = localStorage.getItem('token');
       if (!token) {
-        this.$router.push('/login');
+        this.$router.push({ path: '/login', query: { redirect: this.$route.fullPath } });
         this.isSubmitting = false;
         return;
       }
 
-      if (this.paymentMethod === 'pay-now') { // Changed from booking.paymentMethod
-        // ... (Stripe payment logic) ...
-        if (!this.stripe || !this.cardElement || !this.isStripeReady) {
-          this.stripeError = 'Payment form is not ready. Please wait or try again.';
+      const bookingDetails = {
+        location_id: this.location.location_id, // Corrected: use location_id from the location object
+        start_date: this.formatDateForBackend(this.dateRange.start),
+        end_date: this.formatDateForBackend(this.dateRange.end),
+        total_price: this.finalTotal, 
+        service_fee: parseFloat(this.serviceFee.toFixed(2)),
+        booking_policy: this.location.booking_policy || 'Standard booking policy applies.',
+        // number_of_guests is not directly sent here as the backend doesn't use it for insertion in the Bookings table directly.
+        // It's used for price calculation which is reflected in total_price.
+      };
+      console.log('Initial bookingDetails before Stripe:', bookingDetails);
+
+      if (this.paymentMethod === 'pay-now') {
+        if (!this.stripe || !this.cardElement) {
+          this.stripeError = 'Stripe is not initialized. Please try again.';
           this.isSubmitting = false;
           return;
         }
 
         try {
-          const paymentIntentResponse = await axios.post('http://localhost:3001/api/payments/create-payment-intent', {
-            amount: this.finalTotal, 
-            currency: 'eur', 
-            location_id: parseInt(this.$route.params.id),
+          // 1. Create a PaymentIntent on the backend
+          const paymentIntentResponse = await axios.post('http://localhost:3001/bookings/create-payment-intent', {
+            amount: this.finalTotal,
+            currency: 'eur', // Assuming EUR, adjust if dynamic
           }, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
           const clientSecret = paymentIntentResponse.data.clientSecret;
           if (!clientSecret) {
-            throw new Error('Failed to get payment client secret.');
+            this.stripeError = 'Could not retrieve payment secret. Please try again.';
+            this.isSubmitting = false;
+            return;
           }
 
-          const { paymentIntent, error: stripePaymentError } = await this.stripe.confirmCardPayment(
+          // 2. Confirm the card payment with the clientSecret
+          const { error: stripeError, paymentIntent } = await this.stripe.confirmCardPayment(
             clientSecret, {
               payment_method: {
                 card: this.cardElement,
-              }
+                // billing_details: { name: 'Customer Name' }, // Optional: Add billing details
+              },
             }
           );
 
-          if (stripePaymentError) {
-            this.stripeError = stripePaymentError.message || 'Payment failed. Please check your card details.';
+          if (stripeError) {
+            this.stripeError = stripeError.message || 'Payment failed. Please check your card details.';
             this.isSubmitting = false;
             return;
           }
 
           if (paymentIntent && paymentIntent.status === 'succeeded') {
-            await this.createBookingInSystem(token, paymentIntent.id);
+            bookingDetails.stripe_payment_intent_id = paymentIntent.id;
+            console.log('Stripe PaymentIntent Succeeded, ID:', paymentIntent.id);
           } else {
             this.stripeError = 'Payment was not successful. Please try again.';
             this.isSubmitting = false;
+            return;
           }
 
         } catch (error) {
-          console.error('Payment processing error:', error);
-          this.errorMessage = error.response?.data?.error || error.message || 'An error occurred during payment processing.';
+          console.error('Error during Stripe payment processing:', error);
+          this.stripeError = error.response?.data?.error || error.message || 'An error occurred during payment.';
           this.isSubmitting = false;
+          return;
         }
-      } else { // 'pay-later'
-        await this.createBookingInSystem(token);
+      } // End of pay-now logic
+
+      console.log('Final bookingDetails to be sent to /bookings:', bookingDetails);
+
+      try {
+        const response = await axios.post('http://localhost:3001/bookings', bookingDetails, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (response.data && response.data.booking_id) {
+          this.bookingReference = response.data.booking_reference_number || response.data.booking_id;
+          
+          if (this.paymentMethod === 'pay-now' && response.data.client_secret) {
+            // If backend created a PaymentIntent and requires further action (e.g., 3D Secure)
+            const { error: confirmError } = await this.stripe.confirmCardPayment(
+              response.data.client_secret
+              // No need to pass payment_method_data if payment_method_id was used for PI creation
+            );
+            if (confirmError) {
+              // Payment failed or requires further action not handled here
+              this.errorMessage = `Payment confirmation failed: ${confirmError.message}. Please try again or contact support.`;
+              // Potentially update booking status to 'failed' on backend
+              // For now, we show error and stop.
+              this.isSubmitting = false;
+              return;
+            }
+            // Payment successful and confirmed by Stripe
+            // Update booking status on backend (if not already done by the first POST)
+            // This might involve another API call to set payment_status to 'paid'
+            // For simplicity, assume the first POST to /bookings handles this if Stripe part is successful.
+            console.log('Stripe payment confirmed successfully.');
+            // Update local payment status for UI if necessary
+            bookingDetails.payment_status = 'paid'; 
+          }
+
+          this.showSuccessModal = true;
+        } else {
+          this.errorMessage = 'Booking failed. No booking ID received. Please try again.';
+        }
+      } catch (error) {
+        console.error('Error creating booking:', error);
+        if (error.response && error.response.data && error.response.data.message) {
+          this.errorMessage = `Booking failed: ${error.response.data.message}`;
+        } else {
+          this.errorMessage = 'An unexpected error occurred while creating your booking. Please try again.';
+        }
+      } finally {
+        this.isSubmitting = false;
       }
     },
 
