@@ -730,16 +730,18 @@ export default {
           // Calculate and set adjusted_price_per_night
           const basePrice = parseFloat(location.price_per_night);
           const numGuests = parseInt(this.numberOfGuests, 10);
+          let adjustedPrice = null;
 
-          if (!isNaN(basePrice) && !isNaN(numGuests) && numGuests > 0) {
-            this.$set(location, 'adjusted_price_per_night', basePrice * numGuests);
-          } else if (!isNaN(basePrice)) {
-            // If guests are invalid (e.g., 0 or NaN), but base price is valid, use base price
-            this.$set(location, 'adjusted_price_per_night', basePrice);
-          } else {
-            // If base price is invalid (e.g., null or not a number), set adjusted price to null
-            this.$set(location, 'adjusted_price_per_night', null);
+          if (!isNaN(basePrice)) {
+            if (!isNaN(numGuests) && numGuests > 1) {
+              adjustedPrice = basePrice + (basePrice * 0.45 * (numGuests - 1));
+            } else { // Handles numGuests <= 1 or invalid numGuests, defaults to basePrice
+              adjustedPrice = basePrice;
+            }
           }
+          // If basePrice is NaN, adjustedPrice remains null
+
+          this.$set(location, 'adjusted_price_per_night', adjustedPrice);
 
         } catch (error) {
           console.error(`Error loading data for location ${location.location_id}:`, error);
