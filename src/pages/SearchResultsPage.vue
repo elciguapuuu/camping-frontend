@@ -171,13 +171,13 @@
                 <router-link :to="{ path: `/location/${location.location_id}`, query: getCurrentSearchParamsForDetails() }" class="view-details">
                   View Details
                 </router-link>
-                <button 
+                <!-- <button 
                   @click="bookLocation(location)" 
                   class="book-btn" 
                   :disabled="!isAuthenticated"
                 >
                   Book Now
-                </button>
+                </button> -->
               </div>
             </div>
           </div>
